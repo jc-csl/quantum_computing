@@ -5,7 +5,7 @@ Módulo *Cloud, IoT and Quantum Computing* · CFGS Administración de Sistemas I
 
 Con la colaboración de CIFP Txurdinaga LHII y Tknika · Proyecto ANNEALING, Viceconsejería de Formación Profesional de Euskadi (curso 2025-26) · Autores: Jaime Corrales y Juan Carlos San Román
 
-> 🌐 **Web de apuntes:** `https://jc-csl.github.io/quantum_computing/` 
+> [🌐 **Web de apuntes:**](https://jc-csl.github.io/quantum_computing/)
 ---
 
 ## Qué contiene
