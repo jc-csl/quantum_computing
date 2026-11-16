@@ -1,0 +1,2147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quantum Annealing y QUBO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Plan: apuntes de aula proyectables. Navy de criostato + cobre del cableado (acento) + verde = solución óptima, rojo = penalización.
+   Layout: índice lateral + "diapositivas" apiladas; en modo presentación se ve una diapositiva a pantalla completa. */
+:root{
+  --bg:#f3f5fa; --surface:#ffffff; --surface-2:#eef1f8; --ink:#171c2c; --muted:#596079; --line:#dbe0ec;
+  --accent:#b25f25; --accent-soft:#f6e6d9; --indigo:#3c4fc4; --indigo-soft:#e5e8fb;
+  --ok:#0b8763; --ok-soft:#dcf3ea; --bad:#cc3434; --bad-soft:#fbe3e3; --warn:#b77400; --warn-soft:#fbf0d9;
+  --code-bg:#121729; --code-ink:#e3e7f5;
+  --f-display:"Archivo","Segoe UI",system-ui,sans-serif; --f-body:"Source Sans 3","Segoe UI",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  --r:12px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0d111d; --surface:#151a2b; --surface-2:#1c2236; --ink:#e7eaf4; --muted:#a2a9c2; --line:#2b3250;
+  --accent:#e58d52; --accent-soft:#3a2617; --indigo:#93a0ff; --indigo-soft:#232a4f;
+  --ok:#3dcc9c; --ok-soft:#123327; --bad:#ff7070; --bad-soft:#3a1a1d; --warn:#f0b443; --warn-soft:#382a10;
+  --code-bg:#0a0d17; --code-ink:#e3e7f5; color-scheme:dark; }}
+:root[data-theme="dark"]{
+  --bg:#0d111d; --surface:#151a2b; --surface-2:#1c2236; --ink:#e7eaf4; --muted:#a2a9c2; --line:#2b3250;
+  --accent:#e58d52; --accent-soft:#3a2617; --indigo:#93a0ff; --indigo-soft:#232a4f;
+  --ok:#3dcc9c; --ok-soft:#123327; --bad:#ff7070; --bad-soft:#3a1a1d; --warn:#f0b443; --warn-soft:#382a10;
+  --code-bg:#0a0d17; --code-ink:#e3e7f5; color-scheme:dark; }
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:400 17px/1.55 var(--f-body);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:var(--f-display);line-height:1.15;text-wrap:balance;margin:0 0 .5em}
+h2{font-size:1.75rem;font-weight:800;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0 0 .8em}
+a{color:var(--indigo)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:4px}
+code,kbd{font-family:var(--f-mono);font-size:.88em}
+:not(pre)>code{background:var(--surface-2);padding:.1em .35em;border-radius:5px}
+kbd{border:1px solid var(--line);border-bottom-width:2px;padding:0 .35em;border-radius:5px;background:var(--surface)}
+img,video{max-width:100%;height:auto;display:block}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:.45em .7em;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-family:var(--f-display);font-weight:700;font-size:.92em;background:var(--surface-2)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.tw table th:first-child,.tw table td:first-child{padding-left:.9em}
+.c{text-align:center}
+
+/* ── estructura ───────────────────────────────── */
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;padding:10px 20px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.brand{font-family:var(--f-display);font-weight:800;font-size:1.02rem;white-space:nowrap;display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
+.brand .dot{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#f3c39c,var(--accent) 55%,#5b2b0e);box-shadow:0 0 0 3px var(--accent-soft)}
+.topbar .sp{flex:1}
+.btn{font:600 .95rem var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:.45em .9em;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:.45em;text-decoration:none}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.small{font-size:.85rem;padding:.3em .7em}
+.layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:0}
+.sidebar{position:sticky;top:57px;height:calc(100vh - 57px);overflow:auto;padding:18px 14px 40px 20px;border-right:1px solid var(--line);font-size:.93rem}
+.sidebar ol{list-style:none;margin:0;padding:0}
+.sidebar .u{margin-bottom:10px}
+.sidebar .u>a{display:flex;gap:8px;font-family:var(--f-display);font-weight:700;color:var(--ink);text-decoration:none;padding:4px 6px;border-radius:8px}
+.sidebar .u>a .n{color:var(--accent);min-width:1.4em}
+.sidebar .u ol a{display:block;color:var(--muted);text-decoration:none;padding:2px 6px 2px 2.3em;border-radius:6px;line-height:1.35}
+.sidebar a:hover,.sidebar a.on{background:var(--surface-2);color:var(--ink)}
+main{padding:24px clamp(16px,3vw,48px) 80px;min-width:0}
+
+/* ── diapositivas ─────────────────────────────── */
+.slide{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:clamp(20px,3vw,40px);margin:0 auto 22px;max-width:1180px;scroll-margin-top:72px;position:relative}
+.slide .kicker{font:700 .98em var(--f-display);letter-spacing:.07em;text-transform:uppercase;color:var(--accent);margin-bottom:.4em;display:block}
+.slide .lead{font-size:1.12em;color:var(--muted);max-width:68ch}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:clamp(16px,3vw,36px);align-items:start}
+.cols.wide-l{grid-template-columns:1.3fr 1fr}
+.cols.wide-r{grid-template-columns:1fr 1.35fr}
+.cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.cols4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stack{display:grid;gap:14px;min-width:0}
+.stack>*,.cols>*,.lab-grid>*{min-width:0}
+.prose{max-width:68ch}
+.prose ul,.prose ol{padding-left:1.2em;margin:0 0 .8em}
+.prose li{margin:.2em 0}
+figure{margin:0}
+.fig{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:8px;overflow:hidden}
+.fig img,.fig video{margin:auto;border-radius:6px}
+figcaption{font-size:.85rem;color:var(--muted);margin-top:.45em}
+.fig.dark{background:#0b0e18}
+.card{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;background:var(--surface)}
+.card h3,.card h4{margin-bottom:.35em}
+.card.tint{background:var(--surface-2);border-color:transparent}
+.card .tag{display:inline-block;font:700 .72rem var(--f-display);letter-spacing:.06em;text-transform:uppercase;padding:.15em .55em;border-radius:999px;background:var(--indigo-soft);color:var(--indigo);margin-bottom:.4em}
+.callout{border-left:5px solid var(--indigo);background:var(--indigo-soft);border-radius:0 var(--r) var(--r) 0;padding:12px 16px;margin:.6em 0}
+.callout.warn{border-color:var(--warn);background:var(--warn-soft)}
+.callout.bad{border-color:var(--bad);background:var(--bad-soft)}
+.callout.ok{border-color:var(--ok);background:var(--ok-soft)}
+.callout.copper{border-color:var(--accent);background:var(--accent-soft)}
+.callout b:first-child{font-family:var(--f-display)}
+.eq{font-family:var(--f-mono);font-size:1.12em;background:var(--surface-2);border-radius:10px;padding:.7em 1em;margin:.6em 0;overflow-x:auto;white-space:nowrap;text-align:center}
+.eq.big{font-size:1.4em;padding:.8em 1em}
+.eq .hl{color:var(--accent);font-weight:600}
+.eq .ok{color:var(--ok);font-weight:600}
+.eq .bad{color:var(--bad);font-weight:600}
+.pill{display:inline-block;padding:.05em .55em;border-radius:999px;font-weight:700;font-size:.85em}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.bad{background:var(--bad-soft);color:var(--bad)} .pill.warn{background:var(--warn-soft);color:var(--warn)}
+tr.best td{background:var(--ok-soft);font-weight:700}
+.unit-cover{display:grid;grid-template-columns:auto 1fr;gap:clamp(16px,4vw,48px);align-items:center;background:linear-gradient(135deg,var(--surface) 55%,var(--accent-soft));}
+.unit-cover .num{font:800 clamp(5rem,12vw,9rem)/0.9 var(--f-display);color:var(--accent);letter-spacing:-.04em}
+.unit-cover h2{font-size:clamp(1.9rem,3.6vw,2.8rem)}
+.unit-cover ul{margin:.3em 0 0;padding-left:1.1em;color:var(--muted)}
+details{border:1px solid var(--line);border-radius:10px;padding:.5em .9em;margin:.5em 0;background:var(--surface)}
+details summary{cursor:pointer;font-weight:700;color:var(--indigo)}
+details[open] summary{margin-bottom:.4em}
+
+/* portada */
+.hero{max-width:1180px;margin:0 auto 22px;border-radius:22px;padding:clamp(24px,5vw,56px);background:radial-gradient(1200px 400px at 100% 0%,rgba(229,141,82,.35),transparent 60%),linear-gradient(160deg,#0f1530,#1b2350 60%,#2a1d2a);color:#eef0fa;position:relative;overflow:hidden}
+.hero h1{font-size:clamp(2.1rem,4.8vw,3.7rem);font-weight:800;letter-spacing:-.02em;max-width:18ch}
+.hero .sub{font-size:1.2em;color:#c7cbe4;max-width:60ch}
+.hero .meta{font-size:.95rem;color:#aab0d6;margin-top:1.2em}
+.hero .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:1.4em}
+.hero .btn{background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.25)}
+.hero .btn.primary{background:var(--accent);border-color:var(--accent)}
+.hero canvas{position:absolute;right:-40px;top:-20px;width:min(520px,60%);height:auto;opacity:.9;pointer-events:none}
+.hero .inner{position:relative;z-index:1}
+.banner{background:#fff;border-radius:12px;padding:6px 10px;margin-top:1.6em;max-width:700px}
+.units{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-top:6px}
+.units a{display:block;text-decoration:none;color:var(--ink);border:1px solid var(--line);border-radius:var(--r);padding:14px;background:var(--surface)}
+.units a:hover{border-color:var(--accent)}
+.units b{display:block;font:800 1.6rem var(--f-display);color:var(--accent)}
+.units span{font-weight:700;font-family:var(--f-display)}
+.units small{display:block;color:var(--muted);margin-top:.2em}
+
+/* código */
+pre{background:var(--code-bg);color:var(--code-ink);border-radius:var(--r);padding:14px 16px;overflow-x:auto;font:400 .86rem/1.55 var(--f-mono);margin:.6em 0;position:relative}
+pre .k{color:#ff9e64} pre .s{color:#9ece6a} pre .c{color:#7d86a8;font-style:italic} pre .n{color:#7dcfff} pre .f{color:#bb9af7}
+.codewrap{position:relative}
+.codewrap .copy{position:absolute;top:8px;right:8px;z-index:2;background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:.4em 0}
+.tabs button{font:600 .88rem var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:.3em .8em;border-radius:8px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+
+/* widgets */
+.widget{border:2px solid var(--indigo-soft);border-radius:16px;padding:16px;background:var(--surface)}
+.widget .wt{font:800 .8rem var(--f-display);letter-spacing:.07em;text-transform:uppercase;color:var(--indigo);margin-bottom:.6em;display:flex;align-items:center;gap:.5em}
+.widget .wt::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--indigo)}
+.ctrl{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:.4em 0}
+.ctrl label{font-weight:600;font-size:.92rem;display:flex;align-items:center;gap:.5em}
+.ctrl input[type=range]{width:180px;accent-color:var(--accent)}
+.ctrl input[type=number],.ctrl input[type=text],.ctrl select{font:500 .92rem var(--f-mono);padding:.3em .5em;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
+.ctrl input[type=number]{width:6em}
+.bars{display:grid;gap:8px;margin:.6em 0}
+.bar{display:grid;grid-template-columns:70px 1fr 64px;align-items:center;gap:10px;font-variant-numeric:tabular-nums}
+.bar .t{height:22px;background:var(--surface-2);border-radius:6px;overflow:hidden}
+.bar .t i{display:block;height:100%;border-radius:6px;transition:width .25s}
+.measure-out{font:800 3rem var(--f-display);text-align:center;min-height:1.2em;color:var(--accent)}
+.grid2n{display:grid;gap:4px;margin-top:.6em}
+.grid2n div{border-radius:5px;font:600 .72rem var(--f-mono);display:flex;align-items:center;justify-content:center;aspect-ratio:1.6;background:var(--surface-2);color:var(--muted);transition:background .2s,opacity .2s}
+.grid2n div.on{background:var(--accent);color:#fff}
+.grid2n div.q{background:var(--indigo);color:#fff}
+canvas.w{width:100%;height:auto;display:block;background:var(--surface-2);border-radius:10px}
+.stat{font-variant-numeric:tabular-nums;font-weight:700}
+.poly{font:500 .86rem/1.5 var(--f-mono);background:var(--surface-2);padding:.6em .8em;border-radius:8px;max-height:9em;overflow:auto;word-break:break-word}
+.qm{border-collapse:separate;border-spacing:2px;width:auto;font:500 .78rem var(--f-mono)}
+.qm td,.qm th{padding:.25em .4em;border:none;text-align:center;min-width:2.2em;border-radius:4px}
+.qm th{background:none;color:var(--muted);font-weight:600}
+.lab-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:18px}
+.lab-params{display:grid;gap:8px}
+.lab-params label{display:grid;gap:3px;font-weight:600;font-size:.9rem}
+.lab-params input{font:500 .92rem var(--f-mono);padding:.4em .55em;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);width:100%}
+.res td,.res th{font-size:.88rem;padding:.35em .55em}
+.res td.bits{font-family:var(--f-mono)}
+.gl-search{font:500 1rem var(--f-body);padding:.6em .9em;border:1px solid var(--line);border-radius:999px;width:min(420px,100%);background:var(--surface);color:var(--ink)}
+.gl{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-top:12px}
+.gl .card b{font-family:var(--f-display)}
+.gl .card small{display:block;color:var(--accent);font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em}
+.steps{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;counter-reset:s}
+.steps div{border-radius:12px;padding:12px 10px;color:#fff;font-weight:700;font-family:var(--f-display);font-size:.95rem;line-height:1.2;position:relative;min-height:110px}
+.steps div small{display:block;font:italic 400 .85rem var(--f-body);opacity:.9;margin-top:.4em}
+.steps div::before{counter-increment:s;content:counter(s);display:block;font-size:1.5rem;opacity:.6;margin-bottom:.15em}
+.loop{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center}
+.loop .box{border-radius:14px;padding:16px;border:2px solid var(--line)}
+.loop .arrows{display:grid;gap:10px;text-align:center;font-weight:700;font-size:.9rem;color:var(--muted)}
+.loop .arrows span{display:block;padding:.3em .8em;border-radius:999px;background:var(--surface-2)}
+.matrix{display:inline-grid;grid-template-columns:auto repeat(2,90px);gap:4px;font:700 1.5rem var(--f-mono);text-align:center}
+.matrix div{padding:.5em;border-radius:8px}
+.matrix .h{background:none;color:var(--muted);font-size:1rem;align-self:center}
+.footer{max-width:1180px;margin:0 auto;color:var(--muted);font-size:.9rem;padding:10px 4px}
+.logos{display:flex;gap:18px;align-items:center;flex-wrap:wrap;background:#fff;border-radius:12px;padding:10px 16px;margin:.6em 0;width:fit-content}
+.logos img{height:44px;width:auto}
+
+/* declaración IA */
+.ia-decl{display:flex;align-items:center;gap:14px;font-size:.85rem;line-height:1.4;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:var(--surface);max-width:1180px;margin:0 auto 22px}
+.ia-decl img{height:58px;width:auto;flex:none}
+.hero .ia-decl{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#d5d9ee;margin:1.2em 0 0;max-width:720px}
+body.present .tw td,body.present .tw th{padding:.35em .6em}
+body.present .cmd{font-size:.86em}
+body.present .ia-decl{font-size:.8em}
+/* logos */
+.logos-main{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-top:1.4em}
+.logos-main .main{background:#fff;border-radius:12px;padding:10px 16px}
+.logos-main .main img{height:54px;width:auto}
+.logos-main .collab{display:flex;align-items:center;gap:14px;font-size:.8rem;color:#aab0d6}
+.logos-main .collab img{height:36px;width:auto;opacity:.85;background:#fff;border-radius:6px;padding:3px 6px}
+.credits .main img{height:64px;width:auto;background:#fff;border-radius:12px;padding:10px 16px}
+.credits .collab{display:flex;align-items:center;gap:12px;margin-top:10px;font-size:.85rem;color:var(--muted)}
+.credits .collab img{height:38px;width:auto;background:#fff;border-radius:6px;padding:3px 6px}
+details.code{border-style:dashed}
+details.code summary{font-size:.95rem}
+main{overflow-x:hidden}
+.widget{min-width:0}
+.cmd td code{white-space:normal}
+.cmd th:first-child,.cmd td:first-child{min-width:170px}
+footer.footer{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line);margin-top:10px}
+@media print{ .topbar,.sidebar,.pres-ui,.btn{display:none!important} .layout{display:block} .slide{break-inside:avoid;border:none;box-shadow:none;page-break-inside:avoid} body{background:#fff} .hero{color:#111;background:#f3f5fa} }
+
+/* ── modo presentación ─────────────────────────── */
+.pres-ui{display:none}
+body.present{overflow:hidden}
+html:has(body.present),body.present{height:100%}
+body.present .topbar,body.present .sidebar,body.present .footer{display:none}
+body.present .layout{display:block;height:100%}
+body.present main{padding:0;height:100%}
+body.present .slide,body.present .hero{display:none}
+body.present .slide.active,body.present .hero.active{display:flex;flex-direction:column;justify-content:safe center;max-width:none;width:100%;height:100%;margin:0;border-radius:0;border:none;overflow:auto;padding:clamp(24px,4vh,56px) clamp(28px,6vw,110px) 70px;font-size:clamp(16px,1.25vw,26px)}
+body.present .slide.active>*{width:100%;max-width:1500px;margin-left:auto;margin-right:auto;flex-shrink:0}
+body.present .slide.active h2{font-size:2em}
+body.present #s3-8 .fig img{max-height:26vh}
+body.present .slide .fig img{max-height:50vh;width:auto}
+body.present .slide .fig video{max-height:46vh;width:auto;margin:auto}
+body.present canvas.w{max-height:40vh;width:auto;max-width:100%;margin:auto}
+body.present pre{font-size:.78em}
+body.present #u6 .gl{max-height:none}
+body.present .hero.active h1{font-size:clamp(2.6rem,5.5vw,5rem)}
+body.present .pres-ui{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:50;align-items:center;gap:10px;padding:8px 14px;background:color-mix(in srgb,var(--bg) 85%,transparent);border-top:1px solid var(--line)}
+.pres-ui .prog{flex:1;height:5px;background:var(--surface-2);border-radius:5px;overflow:hidden}
+.pres-ui .prog i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}
+.pres-ui .count{font:600 .9rem var(--f-mono);min-width:5.5em;text-align:center}
+
+@media (max-width:980px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{display:none}
+  .cols,.cols.wide-l,.cols.wide-r,.lab-grid{grid-template-columns:1fr}
+  .cols4{grid-template-columns:repeat(2,1fr)}
+  .cols3{grid-template-columns:1fr 1fr}
+  .steps{grid-template-columns:repeat(2,1fr)}
+  .loop{grid-template-columns:1fr}
+  .unit-cover{grid-template-columns:1fr}
+}
+@media (max-width:520px){ .cols3,.cols4{grid-template-columns:1fr} .topbar .hide-s{display:none} body{font-size:16px} #wQubit>div[style]{grid-template-columns:1fr!important} .matrix{grid-template-columns:auto repeat(2,64px);font-size:1.2rem} .hero canvas{display:none} .brand{font-size:.95rem} }
+@media (prefers-reduced-motion:reduce){ *{transition:none!important;animation:none!important} }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#inicio"><span class="dot" aria-hidden="true"></span>Quantum Annealing · QUBO</a>
+  <span class="sp"></span>
+  <button class="btn" id="themeBtn" type="button" title="Cambiar tema claro/oscuro">◐ <span class="hide-s">Tema</span></button>
+  <button class="btn primary" id="presBtn" type="button" title="Tecla P">▶ <span class="hide-s">Modo presentación</span></button>
+</header>
+
+<div class="layout">
+<nav class="sidebar" id="toc" aria-label="Índice"></nav>
+<main id="main">
+
+<!-- ═════════════════════════════ PORTADA ═════════════════════════════ -->
+<section class="hero slide-like" id="inicio" data-title="Portada">
+  <canvas id="heroCanvas" width="520" height="520" aria-hidden="true"></canvas>
+  <div class="inner">
+    <p class="meta" style="margin:0 0 .6em">Cloud, IoT and Quantum Computing · CFGS ASIR</p>
+    <h1>Introducción a la computación cuántica: Quantum Annealing y modelo QUBO</h1>
+    <p class="sub">Del qubit al problema de optimización resuelto en Python con D-Wave Ocean (dimod). Apuntes, simuladores y prácticas.</p>
+    <div class="btns">
+      <a class="btn primary" href="#u1">Empezar</a>
+      <button class="btn" type="button" data-present>▶ Presentar desde aquí</button>
+      <a class="btn" href="#lab">Simulador QUBO</a>
+    </div>
+    <div class="logos-main">
+      <div class="main"><img src="img/logo-sanluis.png" alt="Centro San Luis" width="500" height="110"></div>
+      <div class="collab"><span>Con la colaboración de</span><img src="img/logo-txurdinaga.png" alt="CIFP Txurdinaga LHII" width="191" height="66"><img src="img/logo-tknika.png" alt="Tknika" width="400" height="89"></div>
+    </div>
+    <p class="meta">Proyecto ANNEALING · Viceconsejería de Formación Profesional de Euskadi · curso 2025-26 · Jaime Corrales y Juan Carlos San Román</p>
+    <div class="ia-decl"><img src="img/ia-verde.png" alt="Semáforo de uso de IA: verde, permitido" width="149" height="200"><div><b>Declaración de uso de IA</b> · Guía de uso de la IA en el aula, Centro San Luis (nivel verde). Este material parte de los apuntes propios del profesorado; se ha utilizado IA para la mejora de redacción, el formateo, los gráficos explicativos y los simuladores, con revisión y validación del profesorado.</div></div>
+  </div>
+</section>
+
+<section class="slide" id="indice" data-title="Índice">
+  <span class="kicker">Contenido</span>
+  <h2>Hoja de ruta</h2>
+  <div class="units">
+    <a href="#u1"><b>1</b><span>Conceptos básicos</span><small>Qubit, superposición, medición, interferencia, entrelazamiento, túnel</small></a>
+    <a href="#u2"><b>2</b><span>Hardware y estado actual</span><small>Tipos de qubits, puertas vs annealing, NISQ, híbrido</small></a>
+    <a href="#u3"><b>3</b><span>Quantum Annealing</span><small>Paisaje de energía, temperatura, D-Wave vs Fujitsu</small></a>
+    <a href="#u4"><b>4</b><span>Modelo QUBO</span><small>Objetivo + penalizaciones, ejemplo paso a paso, matriz Q</small></a>
+    <a href="#u5"><b>5</b><span>Programar con dimod</span><small>dimod.Binary, SimulatedAnnealingSampler, ExactSolver</small></a>
+    <a href="#u6"><b>6</b><span>Glosario</span><small>Buscador de términos</small></a>
+    <a href="#u7"><b>7</b><span>Prácticas</span><small>Entorno, comandos, simulador y ejercicios con código comentado</small></a>
+  </div>
+  <p style="margin-top:1em;color:var(--muted)">Modo presentación: <kbd>P</kbd> para entrar, <kbd>←</kbd> <kbd>→</kbd> para avanzar, <kbd>Esc</kbd> para salir, <kbd>F</kbd> pantalla completa.</p>
+</section>
+
+<!-- ═════════════════════════════ UNIDAD 1 ═════════════════════════════ -->
+<section class="slide unit-cover" id="u1" data-title="Unidad 1 · Conceptos básicos" data-unit="1">
+  <div class="num">01</div>
+  <div>
+    <span class="kicker">Unidad 1</span>
+    <h2>Conceptos básicos de computación cuántica</h2>
+    <p class="lead">Buscamos la <b>idea</b> de cada propiedad cuántica y para qué sirve en informática. No hace falta saber física.</p>
+    <ul><li>Qubit y esfera de Bloch</li><li>Superposición y medición</li><li>Interferencia y entrelazamiento</li><li>Decoherencia y efecto túnel</li></ul>
+  </div>
+</section>
+
+<section class="slide" id="s1-1" data-title="¿Qué es la computación cuántica?">
+  <span class="kicker">1.1</span>
+  <h2>¿Qué es la computación cuántica?</h2>
+  <div class="cols wide-r">
+    <div class="prose">
+      <p>Un <b>paradigma de computación distinto</b> al clásico, basado en las leyes de la mecánica cuántica: cómo se comporta la materia a escala de átomos, electrones y fotones.</p>
+      <div class="tw"><table>
+        <tr><th></th><th>Clásico</th><th>Cuántico</th></tr>
+        <tr><td>Unidad</td><td><b>bit</b>: 0 <b>o</b> 1</td><td><b>qubit</b>: 0, 1 o mezcla de ambos</td></tr>
+        <tr><td>Funciona con</td><td>puertas lógicas</td><td>superposición, interferencia…</td></tr>
+        <tr><td>Sirve para</td><td>casi todo</td><td><b>ciertos</b> problemas</td></tr>
+      </table></div>
+      <div class="callout copper" style="margin-top:1em"><b>Idea clave.</b> No es "más rápido en todo". Para algunos problemas (optimización, química, criptografía) encuentra la solución por un camino al que un ordenador clásico no tiene acceso.</div>
+      <p style="font-size:.9em">🎬 <a href="https://youtu.be/bkUjjTwluQI">Física cuántica: los conceptos básicos en 25 minutos</a></p>
+    </div>
+    <figure class="fig"><img src="img/propiedades-cuanticas.jpg" alt="Esquema: superposición, entrelazamiento, interferencia y medición cuántica" width="1400" height="933"><figcaption>Las cuatro propiedades que usa un ordenador cuántico.</figcaption></figure>
+  </div>
+</section>
+
+<section class="slide" id="s1-2" data-title="El qubit">
+  <span class="kicker">1.2</span>
+  <h2>Bit vs qubit</h2>
+  <div class="cols">
+    <div class="prose">
+      <p>Un <b>bit</b> es un interruptor: apagado (0) o encendido (1).</p>
+      <p>Un <b>qubit</b> puede ser 0, 1 o una <b>combinación ponderada</b> de los dos a la vez:</p>
+      <div class="eq big">|ψ⟩ = <span class="hl">α</span>|0⟩ + <span class="hl">β</span>|1⟩</div>
+      <div class="eq">|α|² + |β|² = 1</div>
+      <ul>
+        <li><b>α, β</b>: amplitudes de probabilidad.</li>
+        <li><b>|α|²</b>: probabilidad de leer <b>0</b>. <b>|β|²</b>: probabilidad de leer <b>1</b>.</li>
+        <li>Suman 1 (100 %): al medir <b>siempre</b> sale 0 o 1.</li>
+      </ul>
+    </div>
+    <div class="stack">
+      <figure class="fig"><img src="img/bit-vs-qubit.png" alt="Un bit está en 0 o 1; un qubit es un vector en una esfera entre 0 y 1" width="992" height="546"></figure>
+      <div class="callout"><b>Ejemplo.</b> Si |α|² = 0,7 y |β|² = 0,3, de 100 qubits iguales medidos saldrán unos 70 ceros y 30 unos.</div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s1-3" data-title="Esfera de Bloch">
+  <span class="kicker">1.3</span>
+  <h2>La esfera de Bloch</h2>
+  <div class="cols wide-l">
+    <div class="prose">
+      <p>Representa un qubit como un <b>punto en una esfera de radio 1</b>:</p>
+      <ul>
+        <li><b>Polo norte</b> → |0⟩ · <b>Polo sur</b> → |1⟩</li>
+        <li><b>Resto de la superficie</b> → superposiciones</li>
+        <li><b>Interior</b> → estados dañados por el ruido (decoherencia)</li>
+      </ul>
+      <p>El ángulo <b>θ</b> (desde el polo norte) decide las probabilidades: cuanto más baja el vector, más probable es leer 1. El ángulo <b>φ</b> es la <b>fase</b>, clave para la interferencia.</p>
+      <p>🧪 Simulador: <a href="https://javafxpert.github.io/grok-bloch/">Grok the Bloch Sphere</a></p>
+    </div>
+    <figure class="fig"><img src="img/esfera-bloch.png" alt="Esfera de Bloch con los estados |0⟩ arriba, |1⟩ abajo y el vector |ψ⟩ con ángulos θ y φ" width="640" height="481"></figure>
+  </div>
+</section>
+
+<section class="slide" id="s1-4" data-title="Simulador: mide un qubit">
+  <span class="kicker">1.4 · Simulador</span>
+  <h2>Medición: el qubit "colapsa"</h2>
+  <div class="cols">
+    <div class="prose">
+      <p>Mientras no lo miramos, el qubit evoluciona de forma ordenada y podemos "moldearlo" con microondas o láseres.</p>
+      <p>Al <b>medir</b>, la superposición <b>colapsa</b>: obtenemos un único 0 o 1, con probabilidades |α|² y |β|².</p>
+      <div class="callout bad"><b>Error frecuente.</b> "El ordenador cuántico prueba todas las soluciones y las lee todas a la vez." Falso: solo leemos <b>un</b> resultado. Por eso los algoritmos se diseñan para que la respuesta buena sea la <b>más probable</b>.</div>
+    </div>
+    <div class="widget" id="wQubit">
+      <div class="wt">Mueve el qubit y mídelo</div>
+      <div class="ctrl"><label for="qTheta">Ángulo θ <input type="range" id="qTheta" min="0" max="180" value="90"></label><span class="stat" id="qThetaV">90°</span></div>
+      <div style="display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:center">
+        <svg id="qSvg" viewBox="-60 -60 120 120" width="150" height="150" aria-label="Corte de la esfera de Bloch"></svg>
+        <div>
+          <div class="eq" id="qEq" style="font-size:.95em">|ψ⟩ = 0,71|0⟩ + 0,71|1⟩</div>
+          <div class="bars">
+            <div class="bar"><span>P(0)</span><span class="t"><i id="qB0" style="background:var(--indigo)"></i></span><span class="stat" id="qP0"></span></div>
+            <div class="bar"><span>P(1)</span><span class="t"><i id="qB1" style="background:var(--accent)"></i></span><span class="stat" id="qP1"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="ctrl"><button class="btn" id="qM1" type="button">Medir 1 vez</button><button class="btn" id="qM100" type="button">Medir 100 qubits</button><button class="btn small" id="qReset" type="button">Reiniciar</button></div>
+      <div class="measure-out" id="qOut" aria-live="polite"></div>
+      <div id="qHist" class="bars"></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s1-5" data-title="Superposición">
+  <span class="kicker">1.5</span>
+  <h2>Superposición: el electrón no tiene órbita</h2>
+  <p class="lead">El modelo de Bohr dibujaba electrones girando como planetas. La mecánica cuántica lo descarta: el electrón está "repartido" en una <b>nube de probabilidad</b> (orbital) y solo al medir aparece en un punto concreto.</p>
+  <div class="cols3">
+    <figure class="fig dark"><img src="img/orbital-indeterminacion.jpg" alt="Orbital atómico como nube de indeterminación" width="800" height="888"></figure>
+    <figure class="fig dark"><img src="img/orbital-probabilidad.jpg" alt="Orbital con zonas de distinta probabilidad: 14 %, 21 %, 16 %" width="800" height="773"></figure>
+    <figure class="fig dark"><video src="img/orbital-animado.mp4" autoplay muted loop playsinline aria-label="Animación de un orbital atómico"></video></figure>
+  </div>
+  <p style="font-size:.85rem;color:var(--muted);margin-top:.6em">Fuente: <a href="https://www.youtube.com/@QuantumFracture">Quantum Fracture (YouTube)</a></p>
+</section>
+
+<section class="slide" id="s1-6" data-title="n qubits = 2ⁿ estados">
+  <span class="kicker">1.6 · Simulador</span>
+  <h2>n qubits representan 2ⁿ estados a la vez</h2>
+  <div class="cols wide-r">
+    <div class="prose">
+      <p><b>3 bits</b> pueden guardar 8 combinaciones (000…111), pero <b>solo una cada vez</b>. Para pasar de 101 a 111 hay que cambiar bits uno a uno.</p>
+      <p><b>3 qubits</b> pueden estar en superposición de <b>las 8 a la vez</b>:</p>
+      <div class="eq">|ψ⟩ = α₀|000⟩ + α₁|001⟩ + … + α₇|111⟩</div>
+      <div class="tw"><table>
+        <tr><th>Qubits</th><th>Estados simultáneos</th></tr>
+        <tr><td>10</td><td>1.024</td></tr><tr><td>20</td><td>≈ 1 millón</td></tr><tr><td>50</td><td>≈ 10¹⁵</td></tr><tr><td>100</td><td>≈ 10³⁰</td></tr>
+      </table></div>
+    </div>
+    <div class="widget">
+      <div class="wt">Bits vs qubits</div>
+      <div class="ctrl">
+        <label for="nQ">n = <input type="range" id="nQ" min="1" max="10" value="3"></label><span class="stat" id="nQv"></span>
+        <div class="tabs" role="tablist"><button type="button" role="tab" aria-selected="true" id="nClas">Bits clásicos</button><button type="button" role="tab" aria-selected="false" id="nQuan">Qubits</button></div>
+      </div>
+      <p id="nTxt" style="margin:.3em 0;font-weight:600"></p>
+      <div class="grid2n" id="nGrid"></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s1-7" data-title="Crecimiento exponencial">
+  <span class="kicker">1.6</span>
+  <h2>Cada qubit extra duplica el espacio</h2>
+  <div class="cols">
+    <figure class="fig"><img src="img/superposicion-n-qubits.jpg" alt="Superposición simultánea de n qubits: 2 elevado a n estados cuánticos" width="1400" height="933"></figure>
+    <figure class="fig"><img src="img/crecimiento-2n.png" alt="Gráfica logarítmica: estados 2^n frente a número de qubits" width="1400" height="602"><figcaption>Escala logarítmica: con 50 qubits ya son ≈ 10¹⁵ estados.</figcaption></figure>
+  </div>
+</section>
+
+<section class="slide" id="s1-8" data-title="Interferencia">
+  <span class="kicker">1.7 · Simulador</span>
+  <h2>Interferencia: sumar lo correcto, cancelar lo incorrecto</h2>
+  <div class="cols">
+    <div class="prose">
+      <p>La superposición <b>sola no basta</b>. La ventaja aparece cuando el algoritmo usa la <b>interferencia</b> para cambiar las probabilidades antes de medir:</p>
+      <ul>
+        <li><b style="color:var(--ok)">Constructiva</b>: las ondas de la respuesta correcta se suman → más probable.</li>
+        <li><b style="color:var(--bad)">Destructiva</b>: las de las respuestas incorrectas se cancelan → casi imposibles.</li>
+      </ul>
+      <div class="callout"><b>Analogía.</b> 1.000 exploradores salen a la vez por un terreno. En los valles poco profundos sus señales de radio se anulan; en el valle más profundo se suman y atraen a los demás. Al final casi todos están allí: esa es la respuesta que medimos.</div>
+    </div>
+    <div class="widget">
+      <div class="wt">Suma dos ondas</div>
+      <div class="ctrl"><label for="phase">Desfase de la onda B <input type="range" id="phase" min="0" max="360" value="0"></label><span class="stat" id="phaseV"></span></div>
+      <canvas class="w" id="waveC" width="640" height="300" aria-label="Onda A, onda B y su suma"></canvas>
+      <p id="phaseTxt" style="font-weight:700;margin:.5em 0 0"></p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s1-9" data-title="Shor y Grover">
+  <span class="kicker">1.7</span>
+  <h2>Algoritmos que usan interferencia</h2>
+  <div class="cols">
+    <div class="card"><span class="tag">Algoritmo de Shor</span><h3>Factorizar números enormes</h3><p>Descompone un número gigante en sus factores primos. La seguridad de <b>RSA</b> se basa en que eso es casi imposible para un ordenador clásico.</p><p class="pill warn">Hoy: necesita ordenadores cuánticos mucho mayores que los actuales</p></div>
+    <div class="card"><span class="tag">Algoritmo de Grover</span><h3>Buscar en datos desordenados</h3><p>Con N elementos, un PC necesita hasta N pasos; Grover, unos <b>√N</b>.</p><div class="eq">1.000.000 datos → ≈ 1.000 pasos</div></div>
+  </div>
+  <figure class="fig" style="margin-top:14px"><img src="img/interferencia-ondas.jpg" alt="Interferencia constructiva (ondas en fase se suman) y destructiva (ondas en oposición se anulan)" width="1400" height="990" style="max-height:340px;width:auto"></figure>
+</section>
+
+<section class="slide" id="s1-10" data-title="Entrelazamiento">
+  <span class="kicker">1.8</span>
+  <h2>Entrelazamiento</h2>
+  <div class="cols wide-r">
+    <div class="prose">
+      <p>Una <b>correlación cuántica</b> entre qubits: el estado de uno queda ligado al del otro <b>aunque estén lejos</b>. Si medimos uno, sabemos al instante qué vale el otro.</p>
+      <ul><li>Imprescindible en algoritmos como Shor y Grover.</li><li>Base de la teleportación cuántica y de comunicaciones seguras.</li></ul>
+      <p>🧪 Animación interactiva: <a href="https://entanglementqbits.netlify.app/">entanglementqbits.netlify.app</a></p>
+      <figure class="fig"><img src="img/entrelazamiento-fotones.jpg" alt="Par de fotones entrelazados: si el 1 es rojo, el 2 es azul" width="1200" height="965" style="max-height:300px;width:auto"></figure>
+    </div>
+    <figure class="fig"><video src="img/entrelazamiento-animado.mp4" autoplay muted loop playsinline aria-label="Dos qubits entrelazados en esferas de Bloch"></video><figcaption>Dos qubits entrelazados: al mover uno, el otro responde.</figcaption></figure>
+  </div>
+</section>
+
+<section class="slide" id="s1-11" data-title="Decoherencia">
+  <span class="kicker">1.9</span>
+  <h2>Decoherencia: el enemigo</h2>
+  <div class="cols wide-l">
+    <div class="prose">
+      <p>Es la <b>pérdida del comportamiento cuántico</b>: el qubit deja la superposición y se vuelve un bit clásico.</p>
+      <ul>
+        <li><b>A propósito</b>: al medir.</li>
+        <li><b>Por accidente</b>: calor, vibraciones, radiación, campos electromagnéticos.</li>
+      </ul>
+      <p>Los estados cuánticos son <b>extremadamente frágiles</b>. Por eso los qubits superconductores trabajan a ≈ <b>−273 °C</b> (cerca del cero absoluto) dentro de criostatos, aislados de todo.</p>
+      <div class="callout warn"><b>Consecuencia.</b> Construir ordenadores cuánticos grandes exige <b>corrección de errores</b>: usar muchos qubits físicos para obtener un qubit lógico fiable.</div>
+    </div>
+    <figure class="fig dark"><img src="img/criostato-qpu.jpg" alt="Criostato con cableado de cobre y el chip cuántico en la parte inferior" width="800" height="963" style="max-height:480px;width:auto"><figcaption style="color:#aab">Criostato: el chip está abajo, a milikelvin.</figcaption></figure>
+  </div>
+</section>
+
+<section class="slide" id="s1-12" data-title="Efecto túnel">
+  <span class="kicker">1.10</span>
+  <h2>Efecto túnel cuántico</h2>
+  <div class="cols">
+    <div class="prose">
+      <p>Una partícula cuántica puede <b>atravesar una barrera de energía</b> que clásicamente no podría superar: aparece al otro lado de la montaña <b>sin escalarla</b>.</p>
+      <p>En <b>optimización</b> imaginamos las soluciones como un <b>paisaje de montañas y valles</b> (altura = coste). El túnel ayuda a escapar de un <b>valle poco profundo</b> (mínimo local) hacia el <b>más profundo</b> (mínimo global).</p>
+      <div class="callout copper"><b>Conexión.</b> Es la base del <b>Quantum Annealing</b> (unidad 3).</div>
+    </div>
+    <figure class="fig"><img src="img/tunel-cuantico-vs-salto-termico.png" alt="Curva de coste: el salto térmico sube por encima del pico; el túnel cuántico lo atraviesa" width="717" height="558"><figcaption>Rojo: salto térmico (clásico). Azul: túnel cuántico. Fuente: Wikipedia.</figcaption></figure>
+  </div>
+</section>
+
+<section class="slide" id="s1-13" data-title="Resumen unidad 1">
+  <span class="kicker">Resumen · Unidad 1</span>
+  <h2>Siete ideas para recordar</h2>
+  <div class="tw"><table>
+    <tr><th>Propiedad</th><th>En una frase</th><th>¿Para qué sirve?</th></tr>
+    <tr><td><b>Qubit</b></td><td>0, 1 o mezcla de ambos</td><td>Unidad de información cuántica</td></tr>
+    <tr><td><b>Superposición</b></td><td>n qubits → 2ⁿ estados a la vez</td><td>Explorar muchas soluciones</td></tr>
+    <tr><td><b>Medición</b></td><td>Colapsa a 0 o 1 con cierta probabilidad</td><td>Obtener el resultado</td></tr>
+    <tr><td><b>Interferencia</b></td><td>Refuerza lo correcto, cancela lo incorrecto</td><td>Que la respuesta buena sea la más probable</td></tr>
+    <tr><td><b>Entrelazamiento</b></td><td>Qubits correlacionados</td><td>Algoritmos potentes, comunicaciones seguras</td></tr>
+    <tr><td><b>Decoherencia</b></td><td>Pérdida de lo cuántico por ruido</td><td>El enemigo que hay que combatir</td></tr>
+    <tr><td><b>Efecto túnel</b></td><td>Atravesar barreras de energía</td><td>Escapar de mínimos locales (annealing)</td></tr>
+  </table></div>
+  <details><summary>Preguntas de repaso</summary>
+    <ol><li>¿Cuántos estados representa un sistema de 8 qubits? → <b>2⁸ = 256</b></li>
+    <li>Si |α|² = 0,25, ¿probabilidad de medir 1? → <b>0,75</b></li>
+    <li>¿Por qué la superposición sola no da ventaja? → <b>Al medir solo leemos un resultado: hace falta interferencia.</b></li>
+    <li>¿Qué tiene que ver el túnel con la optimización? → <b>Permite pasar de un mínimo local a uno mejor sin subir la barrera.</b></li></ol>
+  </details>
+</section>
+
+<!-- ═════════════════════════════ UNIDAD 2 ═════════════════════════════ -->
+<section class="slide unit-cover" id="u2" data-title="Unidad 2 · Hardware y estado actual" data-unit="2">
+  <div class="num">02</div>
+  <div>
+    <span class="kicker">Unidad 2</span>
+    <h2>Hardware cuántico y estado actual</h2>
+    <p class="lead">Qué máquinas existen, cómo se diferencian y en qué punto real está la tecnología.</p>
+    <ul><li>Tipos de qubits</li><li>Puertas lógicas vs annealing</li><li>Fabricantes y era NISQ</li><li>Modo híbrido, criptografía y SDK</li></ul>
+  </div>
+</section>
+
+<section class="slide" id="s2-1" data-title="Tipos de qubits">
+  <span class="kicker">2.1</span>
+  <h2>¿Con qué se fabrica un qubit?</h2>
+  <div class="cols3">
+    <div class="card"><span class="tag">Superconductores</span><p>Circuitos sin resistencia a ≈ −273 °C.</p><p><span class="pill ok">rápidos, control preciso</span> <span class="pill bad">criostatos enormes</span></p><small>IBM · Google · Rigetti · D-Wave</small></div>
+    <div class="card"><span class="tag">Iones atrapados</span><p>Átomos con carga sujetos por campos y controlados con láser.</p><p><span class="pill ok">muy fiables</span> <span class="pill bad">más lentos</span></p><small>Quantinuum · IonQ</small></div>
+    <div class="card"><span class="tag">Átomos neutros</span><p>Átomos colocados con "pinzas" de láser.</p><p><span class="pill ok">escalan bien</span> <span class="pill bad">tecnología joven</span></p><small>Pasqal · QuEra</small></div>
+    <div class="card"><span class="tag">Fotones</span><p>Partículas de luz individuales.</p><p><span class="pill ok">viajan por fibra</span> <span class="pill bad">difícil hacerlos interactuar</span></p><small>Comunicación y criptografía cuántica</small></div>
+    <div class="card"><span class="tag">Puntos cuánticos</span><p>Un electrón atrapado en un semiconductor.</p><p><span class="pill ok">fábricas de chips actuales</span> <span class="pill bad">muy experimental</span></p><small>Intel · centros de investigación</small></div>
+    <div class="card tint"><span class="tag">Digital (no cuántico)</span><p>Circuitos CMOS que <b>imitan</b> el annealing.</p><p><span class="pill ok">temperatura ambiente</span></p><small>Fujitsu Digital Annealer</small></div>
+  </div>
+</section>
+
+<section class="slide" id="s2-2" data-title="Puertas vs annealing">
+  <span class="kicker">2.2</span>
+  <h2>Dos modelos de ordenador cuántico</h2>
+  <div class="cols">
+    <div class="card"><span class="tag">Puertas lógicas · gate-based</span><h3>El ordenador cuántico "universal"</h3>
+      <ul><li>Circuitos de puertas cuánticas.</li><li>Cualquier algoritmo: Shor, Grover, química…</li><li>Decenas o cientos de qubits de alta calidad.</li><li>Muy sensible al ruido.</li></ul>
+      <small>IBM · Google · Quantinuum · IonQ</small></div>
+    <div class="card" style="border-color:var(--accent)"><span class="tag" style="background:var(--accent-soft);color:var(--accent)">Annealing</span><h3>Especialista en optimización</h3>
+      <ul><li>Solo busca el <b>mínimo de energía</b> de un problema QUBO.</li><li>Miles de qubits.</li><li>Más tolerante al ruido.</li></ul>
+      <small>D-Wave (cuántico) · Fujitsu Digital Annealer (digital)</small></div>
+  </div>
+  <h3 style="margin-top:1.2em">¿Por qué el annealing tiene muchos más qubits?</h3>
+  <div class="cols3">
+    <div class="card tint"><b>Tarea más simple</b><p>Solo busca el valle más bajo; no ejecuta cualquier algoritmo.</p></div>
+    <div class="card tint"><b>Conectividad limitada</b><p>Cada qubit habla con unos pocos vecinos (topologías Pegasus, Zephyr): más fácil de fabricar a gran escala.</p></div>
+    <div class="card tint"><b>Robusto al ruido</b><p>Aunque haya ruido, el sistema tiende a caer hacia el mínimo.</p></div>
+  </div>
+  <div class="callout copper"><b>Resumen.</b> El annealing sacrifica versatilidad a cambio de escala para especializarse en resolver problemas QUBO.</div>
+</section>
+
+<section class="slide" id="s2-3" data-title="Fabricantes">
+  <span class="kicker">2.3</span>
+  <h2>Principales fabricantes (2025–2026)</h2>
+  <div class="tw"><table>
+    <tr><th>Proveedor</th><th>Modelo</th><th>Chip / familia</th><th>Qubits aprox.</th><th>Tecnología</th><th>Uso principal</th></tr>
+    <tr><td><b>IBM</b></td><td>Puertas</td><td>Heron r2 · Nighthawk · Condor</td><td>156 · 120 · 1.121*</td><td>Superconductores</td><td>I+D, química, algoritmos</td></tr>
+    <tr><td><b>Google</b></td><td>Puertas</td><td>Willow</td><td>105</td><td>Superconductores</td><td>Corrección de errores</td></tr>
+    <tr><td><b>Quantinuum</b></td><td>Puertas</td><td>Helios (antes H2)</td><td>98 (H2: 56)</td><td>Iones atrapados</td><td>Máxima fidelidad</td></tr>
+    <tr><td><b>IonQ</b></td><td>Puertas</td><td>Forte / Tempo</td><td>36 – 64 (#AQ)</td><td>Iones atrapados</td><td>Aplicaciones comerciales</td></tr>
+    <tr><td><b>Rigetti</b></td><td>Puertas</td><td>Ankaa-3 / Cepheus</td><td>84 – 108</td><td>Superconductores</td><td>Algoritmos híbridos</td></tr>
+    <tr><td><b>Pasqal</b></td><td>Puertas / analógico</td><td>Átomos neutros</td><td>100 – 1.000</td><td>Átomos + láser</td><td>Simulación de materiales</td></tr>
+    <tr style="background:var(--accent-soft)"><td><b>D-Wave</b></td><td><b>Annealing</b></td><td>Advantage · Advantage2</td><td>5.000+ · 4.400+</td><td>Superconductores</td><td>Optimización</td></tr>
+    <tr style="background:var(--accent-soft)"><td><b>Fujitsu</b></td><td><b>Digital Annealer</b></td><td>DA 4ª generación</td><td>100.000 bits digitales</td><td>CMOS (no cuántico)</td><td>Optimización masiva</td></tr>
+  </table></div>
+  <p style="font-size:.85rem;color:var(--muted);margin-top:.5em">* Condor fue una demostración de escala. El sector cambia cada pocos meses: comprueba las cifras en la web de cada fabricante.</p>
+</section>
+
+<section class="slide" id="s2-4" data-title="Hardware de annealing">
+  <span class="kicker">2.4</span>
+  <h2>Las máquinas de annealing</h2>
+  <div class="cols">
+    <div class="card"><figure class="fig dark" style="margin-bottom:10px"><img src="img/fujitsu-dau-chip.jpg" alt="Chip Digital Annealing Unit de Fujitsu" width="900" height="938" style="max-height:230px;width:auto"></figure>
+      <h3>Fujitsu Digital Annealer</h3><ul><li>Circuitos <b>digitales</b> que imitan el annealing: <b>no usa qubits</b>.</li><li>Funciona a <b>temperatura ambiente</b>.</li><li>Hasta 100.000 variables conectadas <b>todas con todas</b> (all-to-all).</li></ul></div>
+    <div class="card"><figure class="fig" style="margin-bottom:10px"><img src="img/dwave-chip.jpg" alt="Procesador cuántico de D-Wave con su cableado" width="275" height="183" style="max-height:230px;width:auto"></figure>
+      <h3>D-Wave Advantage2</h3><ul><li>Disponible desde mayo de 2025, <b>4.400+ qubits</b>.</li><li>Topología Zephyr: cada qubit conectado con <b>20</b> (antes 15).</li><li>Acceso por la nube <b>Leap</b>.</li></ul></div>
+  </div>
+  <div class="callout"><b>Cerca de casa.</b> En octubre de 2025 se inauguró en Donostia el <b>IBM Quantum System Two</b> del IBM-Euskadi Quantum Computational Center, con procesador Heron de <b>156 qubits</b>: el primero de su clase en Europa.</div>
+</section>
+
+<section class="slide" id="s2-5" data-title="Era NISQ">
+  <span class="kicker">2.5</span>
+  <h2>Era NISQ: dónde estamos de verdad</h2>
+  <div class="cols">
+    <div class="prose">
+      <p><b>NISQ</b> = <i>Noisy Intermediate-Scale Quantum</i>: ordenadores con <b>ruido</b> y tamaño <b>intermedio</b>.</p>
+      <ul><li><b>Ruido</b>: los qubits pierden la información muy rápido.</li><li><b>Escala</b>: 100–150 qubits es mucho, pero romper claves o diseñar fármacos exigirá miles o millones de qubits con corrección de errores.</li></ul>
+      <div class="callout"><b>Hoja de ruta IBM.</b> Primeras ventajas cuánticas verificadas hacia finales de 2026; ordenador tolerante a fallos (Starling, 200 qubits lógicos) hacia 2029.</div>
+    </div>
+    <div class="cols" style="grid-template-columns:1fr 1fr;gap:10px">
+      <div class="card tint"><b>Qubit físico</b><p>El qubit real del chip, con errores.</p></div>
+      <div class="card tint"><b>Qubit lógico</b><p>Qubit fiable hecho con varios físicos + corrección de errores.</p></div>
+      <div class="card tint"><b>Utilidad cuántica</b><p>Resultados fiables donde un simulador clásico de fuerza bruta no llega.</p></div>
+      <div class="card tint"><b>Ventaja cuántica</b><p>Mejor, más rápido o más barato que <b>cualquier</b> método clásico conocido.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s2-6" data-title="Modo híbrido">
+  <span class="kicker">2.6</span>
+  <h2>Modo híbrido: así se usa hoy</h2>
+  <div class="loop">
+    <div class="box"><h3>🖥️ CPU clásica</h3><ul style="margin:0;padding-left:1.1em"><li>Prepara datos y restricciones</li><li>Construye el modelo</li><li>Analiza y ajusta</li></ul></div>
+    <div class="arrows"><span>matriz QUBO →</span><span>← soluciones</span><span>↻ se repite</span></div>
+    <div class="box" style="border-color:var(--accent)"><h3>⚛️ QPU / Annealer</h3><ul style="margin:0;padding-left:1.1em"><li>Recibe el QUBO</li><li>Búsqueda masiva del mínimo de energía</li></ul></div>
+  </div>
+  <div class="cols" style="margin-top:16px">
+    <div class="prose"><h3>En ordenadores de puertas</h3><ul><li><b>QAOA</b>: optimización (rutas, logística, finanzas). Es "el QUBO" del modelo de puertas.</li><li><b>VQE</b>: química, energía de moléculas.</li></ul>
+      <h3>¿Aplicaciones reales?</h3><ul><li><b>Logística</b>: rutas de tráfico (Volkswagen con D-Wave).</li><li><b>Finanzas</b>: carteras con miles de activos.</li><li><b>Fármacos</b>: plegamiento de proteínas.</li></ul></div>
+    <div class="stack">
+      <div class="callout ok"><b>¿Es eso ventaja?</b> A menudo la mejora es encontrar una solución un <b>1–2 % mejor</b> o más rápido. En industrias que mueven miles de millones, ya compensa.</div>
+      <div class="callout warn"><b>No siempre es mejor.</b> Para la mayoría de tareas un ordenador normal es más práctico y barato. El reto es diseñar algoritmos que aprovechen superposición + interferencia.</div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s2-7" data-title="Criptografía">
+  <span class="kicker">2.7</span>
+  <h2>Criptografía en la era cuántica</h2>
+  <div class="cols3">
+    <div class="card" style="border-top:5px solid var(--bad)"><span class="tag" style="background:var(--bad-soft);color:var(--bad)">Amenaza</span><h3>Shor vs RSA</h3><p>Un ordenador cuántico grande y tolerante a fallos podría romper RSA y la criptografía de clave pública actual. <b>Todavía no existe.</b></p></div>
+    <div class="card" style="border-top:5px solid var(--indigo)"><span class="tag">QKD</span><h3>Distribución cuántica de claves</h3><p>Envía claves con fotones (protocolo <b>BB84</b>). Si alguien espía, los fotones cambian (teorema de no clonación) y se detecta. Seguridad basada en <b>leyes físicas</b>; requiere hardware especial.</p></div>
+    <div class="card" style="border-top:5px solid var(--ok)"><span class="tag" style="background:var(--ok-soft);color:var(--ok)">PQC</span><h3>Criptografía post-cuántica</h3><p>Algoritmos <b>clásicos</b> resistentes a ataques cuánticos (p. ej. basados en retículos). <b>Se instala por software</b> en servidores y navegadores actuales.</p></div>
+  </div>
+  <div class="callout copper"><b>Para un técnico ASIR</b>, PQC es lo más cercano: ya se está desplegando en TLS, VPN y SSH.</div>
+</section>
+
+<section class="slide" id="s2-8" data-title="Retos y SDK">
+  <span class="kicker">2.8</span>
+  <h2>Retos pendientes y herramientas de desarrollo</h2>
+  <div class="cols">
+    <div class="prose"><h3>Retos para que sean útiles</h3><ol><li>Más qubits por procesador.</li><li>Hardware más pequeño y eficiente (frío, electrónica, consumo).</li><li>Corrección de errores.</li><li>Nuevos algoritmos con ventaja demostrada.</li><li>Software y middleware estables.</li><li>Integración con supercomputación (HPC + QPU).</li></ol></div>
+    <div class="tw"><table>
+      <tr><th>Fabricante</th><th>SDK</th><th>Modelo</th></tr>
+      <tr><td>IBM</td><td><b>Qiskit</b></td><td>Puertas</td></tr>
+      <tr><td>Microsoft</td><td><b>Azure Quantum / QDK (Q#)</b></td><td>Puertas / híbrido</td></tr>
+      <tr><td>Google</td><td><b>Cirq</b></td><td>Puertas</td></tr>
+      <tr style="background:var(--accent-soft)"><td>D-Wave</td><td><b>Ocean SDK</b> (dimod, dwave-samplers)</td><td>Annealing / híbrido</td></tr>
+      <tr><td>Fujitsu</td><td><b>DADK</b></td><td>Digital Annealer</td></tr>
+    </table></div>
+  </div>
+  <p style="color:var(--muted)">Todos se programan en <b>Python</b>. En este módulo usamos <b>D-Wave Ocean (dimod)</b>: libre, se instala con <code>pip</code> y el modelo se escribe como una fórmula.</p>
+</section>
+
+<!-- ═════════════════════════════ UNIDAD 3 ═════════════════════════════ -->
+<section class="slide unit-cover" id="u3" data-title="Unidad 3 · Quantum Annealing" data-unit="3">
+  <div class="num">03</div>
+  <div>
+    <span class="kicker">Unidad 3</span>
+    <h2>Quantum Annealing</h2>
+    <p class="lead">Cómo un annealer encuentra la mejor solución de un problema de optimización.</p>
+    <ul><li>Recocido y paisaje de energía</li><li>Clásico vs cuántico (simulador)</li><li>Temperatura, iteraciones y runs</li><li>D-Wave vs Fujitsu</li></ul>
+  </div>
+</section>
+
+<section class="slide" id="s3-1" data-title="Recocido">
+  <span class="kicker">3.1</span>
+  <h2>Annealing = recocido</h2>
+  <div class="cols">
+    <div class="prose">
+      <p>En <b>metalurgia</b>, el recocido calienta un metal y lo <b>enfría lentamente</b>: los átomos se ordenan, desaparecen los defectos y el metal queda en su estado de <b>mínima energía</b>.</p>
+      <p>En computación copiamos la idea:</p>
+      <div class="callout copper"><b>Empezar con mucha "agitación"</b> para explorar todo y reducirla poco a poco hasta quedarnos en la solución de <b>menor energía = la mejor</b>.</div>
+      <p>En el <b>Quantum Annealing</b> el sistema empieza en una gran superposición y evoluciona hacia el estado que representa la solución óptima.</p>
+    </div>
+    <figure class="fig dark"><img src="img/quantum-annealing-paisaje.jpg" alt="Ilustración: estado inicial en superposición, efecto túnel y proceso de annealing hasta el mínimo global" width="1200" height="1157" style="max-height:470px;width:auto"><figcaption style="color:#aab">Fuente: D-Wave</figcaption></figure>
+  </div>
+</section>
+
+<section class="slide" id="s3-2" data-title="Paisaje de energía">
+  <span class="kicker">3.2</span>
+  <h2>El paisaje de energía</h2>
+  <div class="cols wide-r">
+    <div class="prose">
+      <ul>
+        <li>Cada punto = <b>una solución posible</b> (una combinación de 0 y 1).</li>
+        <li>La altura = su <b>energía</b>, es decir, su <b>coste</b>.</li>
+        <li>Buscamos el valle más profundo: el <b style="color:var(--ok)">mínimo global</b>.</li>
+        <li>El peligro: quedarse en un <b style="color:var(--accent)">mínimo local</b>, un valle que parece bueno pero no es el mejor.</li>
+      </ul>
+    </div>
+    <figure class="fig"><img src="img/paisaje-energia.png" alt="Paisaje de energía con mínimo local, mínimo global, salto térmico por encima de la barrera y túnel cuántico a través de ella" width="1400" height="728"></figure>
+  </div>
+</section>
+
+<section class="slide" id="s3-3" data-title="Clásico vs cuántico">
+  <span class="kicker">3.3</span>
+  <h2>Clásico vs cuántico</h2>
+  <div class="cols">
+    <div class="card"><span class="tag">🖥️ Recocido simulado (clásico)</span><ul><li>Prueba puntos <b>uno a uno</b>: camina colina abajo.</li><li>Puede quedar atrapado en un valle.</li><li>Para escapar, a veces <b>acepta subir</b> (salto térmico).</li><li>Proceso secuencial.</li></ul><p><i>Un caminante con linterna baja a oscuras; si encuentra un hoyo, cree que ha llegado.</i></p></div>
+    <div class="card" style="border-color:var(--accent)"><span class="tag" style="background:var(--accent-soft);color:var(--accent)">⚛️ Quantum Annealing</span><ul><li>Empieza en <b>superposición</b>: todo el paisaje a la vez.</li><li>El <b>efecto túnel</b> atraviesa montañas.</li><li>Al enfriar, la probabilidad se concentra en los valles más profundos.</li><li>Al medir, colapsa al más profundo con alta probabilidad.</li></ul><p><i>Una niebla que cubre el terreno y se condensa en el punto más bajo.</i></p></div>
+  </div>
+  <div class="tw" style="margin-top:14px"><table>
+    <tr><th>Aspecto</th><th>Clásico</th><th>Cuántico</th></tr>
+    <tr><td>Exploración</td><td>Secuencial, aleatoria</td><td>Paralela (superposición)</td></tr>
+    <tr><td>Salir de mínimos locales</td><td>Saltos térmicos (temperatura)</td><td>Efecto túnel</td></tr>
+    <tr><td>Hardware</td><td>Cualquier CPU</td><td>QPU a ≈ 15 milikelvin</td></tr>
+  </table></div>
+  <div class="callout warn"><b>No siempre es más rápido.</b> Es eficiente en problemas concretos y aún se investiga cuándo y cuánto mejora a lo clásico.</div>
+</section>
+
+<section class="slide" id="s3-4" data-title="Simulador de annealing">
+  <span class="kicker">3.4 · Simulador</span>
+  <h2>Pon a prueba el recocido</h2>
+  <div class="widget">
+    <div class="wt">La bola busca el valle más profundo</div>
+    <canvas class="w" id="annC" width="1100" height="380" aria-label="Paisaje de energía y posición de la búsqueda"></canvas>
+    <div class="ctrl" style="margin-top:.6em">
+      <label for="annT">Temperatura inicial <input type="range" id="annT" min="0" max="100" value="12"></label><span class="stat" id="annTv"></span>
+      <label for="annIt">Iteraciones <input type="range" id="annIt" min="200" max="6000" step="200" value="1500"></label><span class="stat" id="annItv"></span>
+      <label><input type="checkbox" id="annTun"> Túnel (simplificado)</label>
+      <label><input type="checkbox" id="annLoc" checked> Empezar en el mínimo local</label>
+    </div>
+    <div class="ctrl">
+      <button class="btn primary" id="annRun" type="button">▶ Lanzar 1 run</button>
+      <button class="btn" id="annRun20" type="button">Lanzar 20 runs</button>
+      <span id="annMsg" style="font-weight:700" aria-live="polite"></span>
+    </div>
+  </div>
+  <div class="cols3" style="margin-top:12px">
+    <div class="card tint"><b>Prueba 1</b><p>T inicial muy baja y empezar en el mínimo local: la bola no sale del valle.</p></div>
+    <div class="card tint"><b>Prueba 2</b><p>Sube la temperatura: a veces acepta subir y salta la barrera. Lanza 20 runs y mira cuántos llegan al global.</p></div>
+    <div class="card tint"><b>Prueba 3</b><p>Activa "túnel": los saltos ya no tienen que pasar por la cima. <i>Es una simplificación didáctica del efecto túnel.</i></p></div>
+  </div>
+</section>
+
+<section class="slide" id="s3-5" data-title="Algoritmo y temperatura">
+  <span class="kicker">3.5</span>
+  <h2>Recocido simulado por dentro</h2>
+  <div class="cols">
+    <div>
+      <pre><code><span class="n">1.</span> Empezar con bits al azar.
+<span class="n">2.</span> Repetir (iteraciones):
+   a. Proponer cambiar UN bit (0→1 o 1→0)
+   b. Calcular ΔH (cambio de energía)
+   c. Si ΔH &lt; 0 → <span class="s">ACEPTAR</span> (mejora)
+      Si ΔH &gt; 0 → ACEPTAR con
+                  probabilidad <span class="k">e^(−ΔH/T)</span>
+   d. Bajar un poco la temperatura T
+<span class="n">3.</span> Devolver la mejor combinación vista.</code></pre>
+      <div class="tw"><table>
+        <tr><th>T</th><th>Comportamiento</th><th>Fase</th></tr>
+        <tr><td><b style="color:var(--bad)">Alta</b></td><td>Acepta empeorar: sale de valles</td><td>Exploración</td></tr>
+        <tr><td><b style="color:var(--indigo)">Baja</b></td><td>Solo acepta mejoras: afina</td><td>Explotación</td></tr>
+      </table></div>
+    </div>
+    <figure class="fig"><img src="img/temperatura-annealing.png" alt="Izquierda: la temperatura baja con las iteraciones. Derecha: probabilidad de aceptar un cambio peor según T" width="1400" height="502"><figcaption>El Digital Annealer y el <code>SimulatedAnnealingSampler</code> de D-Wave usan versiones de este algoritmo. La temperatura se ajusta sola.</figcaption></figure>
+  </div>
+</section>
+
+<section class="slide" id="s3-6" data-title="Iteraciones y runs">
+  <span class="kicker">3.6</span>
+  <h2>Iteraciones, runs y frecuencia</h2>
+  <div class="cols3">
+    <div class="card"><span class="tag">num_sweeps</span><h3>Iteraciones</h3><p>Pasos de búsqueda dentro de una ejecución. Más iteraciones = enfriamiento más lento y cuidadoso.</p></div>
+    <div class="card"><span class="tag">num_reads</span><h3>Runs</h3><p>Ejecuciones independientes, cada una desde un punto al azar. Más runs = más probabilidad de dar con el mínimo global.</p></div>
+    <div class="card"><span class="tag">num_occurrences</span><h3>Frecuencia</h3><p>En cuántos runs se llegó a la misma solución. Alta frecuencia = resultado estable.</p></div>
+  </div>
+  <div class="callout"><b>¿Por qué varios runs?</b> El método es <b>probabilístico</b>: una ejecución puede acabar en un mínimo local. Repetirlo y quedarse con la mejor solución aumenta la fiabilidad (con rendimiento decreciente).</div>
+</section>
+
+<section class="slide" id="s3-7" data-title="Problemas típicos">
+  <span class="kicker">3.7</span>
+  <h2>¿Qué problemas resuelve un annealer?</h2>
+  <p class="lead">Optimización combinatoria, a menudo <b>NP-difícil</b>: las combinaciones crecen exponencialmente. Asignar 50 tareas a 50 trabajadores ya supera las 10⁶⁴ posibilidades.</p>
+  <div class="cols4">
+    <div class="card"><b>🎒 Mochila</b><p>Elegir objetos de más valor sin pasarse de peso.</p><small>Inversiones, carga de contenedores</small></div>
+    <div class="card"><b>🗺️ Viajante (TSP)</b><p>Ruta más corta que visite todo y vuelva.</p><small>Reparto, brazos robóticos</small></div>
+    <div class="card"><b>👥 Asignación</b><p>Repartir tareas al mínimo coste.</p><small>Turnos, taxis-pasajeros</small></div>
+    <div class="card"><b>✂️ Max-Cut</b><p>Dividir un grafo cortando el máximo de aristas.</p><small>Diseño de redes</small></div>
+    <div class="card"><b>🧩 Particionado</b><p>Grupos con pocas conexiones entre sí.</p><small>Redes sociales, chips</small></div>
+    <div class="card"><b>🎨 Coloración</b><p>Vecinos sin el mismo color.</p><small>Horarios de exámenes</small></div>
+    <div class="card"><b>📈 Carteras</b><p>Máximo retorno, mínimo riesgo.</p><small>Banca, fondos</small></div>
+    <div class="card"><b>🧬 Proteínas</b><p>Forma 3D de mínima energía.</p><small>Nuevos fármacos</small></div>
+  </div>
+</section>
+
+<section class="slide" id="s3-8" data-title="D-Wave vs Fujitsu">
+  <span class="kicker">3.8</span>
+  <h2>D-Wave vs Fujitsu Digital Annealer</h2>
+  <div class="tw"><table>
+    <tr><th></th><th>D-Wave · Quantum Annealing</th><th>Fujitsu · Digital Annealer</th></tr>
+    <tr><td>Hardware</td><td>Qubits superconductores reales</td><td>Circuitos digitales CMOS</td></tr>
+    <tr><td>Temperatura</td><td>≈ 15 milikelvin</td><td>Ambiente</td></tr>
+    <tr><td>Escapa de mínimos locales con</td><td><b>Efecto túnel</b></td><td><b>Temperatura</b> + offset dinámico</td></tr>
+    <tr><td>Conectividad</td><td>Limitada (20 vecinos) → <b>embedding</b></td><td><b>All-to-all</b></td></tr>
+    <tr><td>Programación</td><td>Ocean SDK (dimod): escribes la <b>fórmula</b>; la librería genera el QUBO</td><td>DADK: misma idea, con sus propias clases</td></tr>
+    <tr><td>Acceso</td><td>Nube Leap</td><td>Nube / on-premise</td></tr>
+  </table></div>
+  <div class="cols" style="margin-top:14px">
+    <div class="callout"><b>Embedding.</b> Si en el chip de D-Wave la variable 1 y la 100 no son vecinas, se usan <b>varios qubits físicos encadenados</b> para una sola variable. De 5.000 qubits físicos, en un problema muy conectado quizá solo se aprovechen unos cientos de variables.</div>
+    <figure class="fig"><img src="img/dwave-vs-fujitsu-flujo.jpg" alt="Infografía comparando el flujo de trabajo D-Wave (capa de matriz) y Fujitsu (capa de modelo)" width="1402" height="1122" style="max-height:330px;width:auto"><figcaption>Flujo de trabajo en cada plataforma (elaborado con IA).</figcaption></figure>
+  </div>
+</section>
+
+<!-- ═════════════════════════════ UNIDAD 4 ═════════════════════════════ -->
+<section class="slide unit-cover" id="u4" data-title="Unidad 4 · Modelo QUBO" data-unit="4">
+  <div class="num">04</div>
+  <div>
+    <span class="kicker">Unidad 4</span>
+    <h2>El modelo QUBO</h2>
+    <p class="lead">"QUBO es el puente que traduce decisiones de SÍ o NO en un paisaje de energía. El ordenador solo busca el valle más profundo."</p>
+    <ul><li>Qué significa y vocabulario</li><li>Receta en 6 pasos</li><li>Ejemplo resuelto a mano</li><li>Matriz Q y elección de la penalización</li></ul>
+  </div>
+</section>
+
+<section class="slide" id="s4-1" data-title="¿Qué es QUBO?">
+  <span class="kicker">4.1</span>
+  <h2>Quadratic Unconstrained Binary Optimization</h2>
+  <div class="cols4">
+    <div class="card"><b style="font:800 2.4rem var(--f-display);color:var(--accent)">Q</b><h3>Cuadrática</h3><p>Como mucho productos de <b>dos</b> variables: xᵢ·xⱼ</p></div>
+    <div class="card"><b style="font:800 2.4rem var(--f-display);color:var(--accent)">U</b><h3>Sin restricciones</h3><p>Las restricciones van <b>dentro</b> de la fórmula como penalizaciones</p></div>
+    <div class="card"><b style="font:800 2.4rem var(--f-display);color:var(--accent)">B</b><h3>Binaria</h3><p>Variables que solo valen <b>0 o 1</b></p></div>
+    <div class="card"><b style="font:800 2.4rem var(--f-display);color:var(--accent)">O</b><h3>Optimización</h3><p>Se busca siempre el <b>mínimo</b></p></div>
+  </div>
+  <div class="eq big" style="margin-top:16px">H(x) = Σ Q<sub>ii</sub>·x<sub>i</sub> + Σ Q<sub>ij</sub>·x<sub>i</sub>·x<sub>j</sub> + constante</div>
+  <div class="callout copper"><b>La idea en una línea:</b> QUBO = función objetivo + penalizaciones.</div>
+</section>
+
+<section class="slide" id="s4-2" data-title="Vocabulario QUBO">
+  <span class="kicker">4.2</span>
+  <h2>Vocabulario básico</h2>
+  <div class="cols3">
+    <div class="card"><b>Variable binaria</b><p>Una decisión SÍ/NO: xᵢ ∈ {0, 1}.</p></div>
+    <div class="card"><b>xᵢ² = xᵢ</b><p>Porque 0² = 0 y 1² = 1. Simplifica las fórmulas.</p></div>
+    <div class="card"><b>Función objetivo</b><p>Lo que se optimiza: coste, tiempo, distancia…</p></div>
+    <div class="card" style="border-color:var(--bad)"><b>Penalización</b><p>Suma energía ("multa") a las soluciones que incumplen una restricción.</p></div>
+    <div class="card" style="border-color:var(--bad)"><b>P</b><p>Peso de la penalización. Debe ser suficientemente grande.</p></div>
+    <div class="card" style="border-color:var(--accent)"><b>Hamiltoniano H</b><p>Energía total = objetivo + penalizaciones. Es lo que se envía al solver.</p></div>
+    <div class="card" style="border-color:var(--ok)"><b>Energía</b><p>Valor de H para una combinación. <b>Menor = mejor.</b></p></div>
+    <div class="card"><b>Matriz Q</b><p>Diagonal: términos lineales. Fuera: interacciones xᵢxⱼ.</p></div>
+    <div class="card"><b>Modelo Ising</b><p>Equivalente con variables {−1, +1}. Idioma físico de D-Wave.</p></div>
+  </div>
+</section>
+
+<section class="slide" id="s4-3" data-title="La receta">
+  <span class="kicker">4.3</span>
+  <h2>La receta: de problema real a QUBO</h2>
+  <div class="steps">
+    <div style="background:#495066">Problema real<small>¿Qué decido?</small></div>
+    <div style="background:#3c4fc4">Variables binarias<small>xᵢ ∈ {0,1}</small></div>
+    <div style="background:#3c4fc4">Función objetivo<small>coste o −beneficio</small></div>
+    <div style="background:#c33333">Penalizaciones<small>P·(restricción)²</small></div>
+    <div style="background:#b25f25">Hamiltoniano H<small>objetivo + penaliz.</small></div>
+    <div style="background:#0b8763">Solver<small>minimiza H</small></div>
+    <div style="background:#495066">Interpretar<small>10 → elijo A</small></div>
+  </div>
+  <div class="cols" style="margin-top:16px">
+    <ol class="prose">
+      <li><b>Variables</b>: una binaria por cada decisión SÍ/NO.</li>
+      <li><b>Objetivo</b>: QUBO <b>siempre minimiza</b>. Para maximizar un beneficio, se pone <b>en negativo</b>.</li>
+      <li><b>Penalizaciones</b>: cada restricción → P·(restricción)².</li>
+      <li><b>Expandir</b> usando xᵢ² = xᵢ (dimod lo hace solo).</li>
+      <li><b>Matriz Q</b>: la genera la librería; sirve para leer el modelo.</li>
+      <li><b>Resolver y comprobar</b> que la penalización de la solución es 0.</li>
+    </ol>
+    <div class="callout ok"><b>Comprobar siempre.</b> Una solución con penalización &gt; 0 incumple alguna restricción: no sirve aunque tenga poca energía.</div>
+  </div>
+</section>
+
+<section class="slide" id="s4-4" data-title="Ejemplo: planteamiento">
+  <span class="kicker">4.4 · Ejemplo paso a paso</span>
+  <h2>Elegir el mejor proyecto</h2>
+  <div class="cols">
+    <div class="prose">
+      <div class="callout copper" style="font-size:1.1em">"Quiero elegir <b>exactamente uno</b> de dos proyectos. A da un beneficio de <b>3</b> y B de <b>2</b>."</div>
+      <p>La respuesta es obvia (<b>A</b>), pero así aprendemos el método que luego usaremos en problemas imposibles de resolver a mano.</p>
+      <h3>Paso 1 · Variables</h3>
+      <ul><li>x₁ = 1 si elijo <b>A</b> (0 si no)</li><li>x₂ = 1 si elijo <b>B</b> (0 si no)</li></ul>
+    </div>
+    <div class="prose">
+      <h3>Paso 2 · Función objetivo</h3>
+      <p>Beneficio total: 3x₁ + 2x₂. Como QUBO <b>minimiza</b>, cambiamos el signo:</p>
+      <div class="eq big">H<sub>obj</sub> = <span class="hl">−3x₁ − 2x₂</span></div>
+      <p>Más beneficio → energía más baja.</p>
+      <h3>Paso 3 · Restricción</h3>
+      <p>"Exactamente uno":</p>
+      <div class="eq big">x₁ + x₂ = 1</div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s4-5" data-title="Ejemplo: penalización">
+  <span class="kicker">4.4 · Paso 3</span>
+  <h2>Convertir la restricción en penalización</h2>
+  <div class="cols">
+    <div class="prose">
+      <div class="eq big">H<sub>pen</sub> = <span class="bad">P·(x₁ + x₂ − 1)²</span></div>
+      <p>Al elevar al cuadrado, la penalización vale <b>0</b> si se cumple y es <b>positiva</b> si no, tanto si nos pasamos como si nos quedamos cortos.</p>
+      <div class="callout warn"><b>¿Qué P?</b> Mayor que el beneficio máximo, para que incumplir nunca "salga rentable". Beneficio máximo 3 → <b>P = 4</b>.</div>
+    </div>
+    <div class="tw"><table>
+      <tr><th>Caso</th><th class="c">x₁+x₂−1</th><th class="c">²</th><th class="c">×4</th></tr>
+      <tr><td>Ninguno (0,0)</td><td class="c">−1</td><td class="c">1</td><td class="c"><span class="pill bad">+4 multa</span></td></tr>
+      <tr><td>Solo A (1,0)</td><td class="c">0</td><td class="c">0</td><td class="c"><span class="pill ok">0</span></td></tr>
+      <tr><td>Solo B (0,1)</td><td class="c">0</td><td class="c">0</td><td class="c"><span class="pill ok">0</span></td></tr>
+      <tr><td>Los dos (1,1)</td><td class="c">+1</td><td class="c">1</td><td class="c"><span class="pill bad">+4 multa</span></td></tr>
+    </table></div>
+  </div>
+</section>
+
+<section class="slide" id="s4-6" data-title="Ejemplo: Hamiltoniano">
+  <span class="kicker">4.4 · Paso 4</span>
+  <h2>Construir y expandir el Hamiltoniano</h2>
+  <div class="eq big">H = <span class="hl">−3x₁ − 2x₂</span> + <span class="bad">4·(x₁ + x₂ − 1)²</span></div>
+  <div class="cols">
+    <div class="prose">
+      <p>Expandimos con (a + b − c)² = a² + b² + c² + 2ab − 2ac − 2bc y <b>xᵢ² = xᵢ</b>:</p>
+      <div class="eq">(x₁+x₂−1)² = x₁ + x₂ + 1 + 2x₁x₂ − 2x₁ − 2x₂</div>
+      <div class="eq">= −x₁ − x₂ + 2x₁x₂ + 1</div>
+      <div class="eq">H = −3x₁ − 2x₂ + 4(−x₁ − x₂ + 2x₁x₂ + 1)</div>
+    </div>
+    <div class="stack">
+      <div class="eq big" style="border:2px solid var(--accent)">H = −7x₁ − 6x₂ + 8x₁x₂ + 4</div>
+      <p>El <b>+4</b> es una constante: no cambia cuál es la mejor solución, solo desplaza todas las energías.</p>
+      <p>dimod lo guarda exactamente así:</p>
+      <pre><code>linear    = {'A': -7, 'B': -6}
+quadratic = {('A', 'B'): 8}
+offset    = 4</code></pre>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s4-7" data-title="Ejemplo: comprobación">
+  <span class="kicker">4.4 · Paso 5</span>
+  <h2>Comprobar las 4 combinaciones</h2>
+  <div class="cols wide-r">
+    <div class="tw"><table>
+      <tr><th class="c">x₁</th><th class="c">x₂</th><th>Cálculo</th><th class="c">H</th><th class="c">¿Válida?</th></tr>
+      <tr><td class="c">0</td><td class="c">0</td><td>4</td><td class="c">4</td><td class="c"><span class="pill bad">no</span></td></tr>
+      <tr class="best"><td class="c">1</td><td class="c">0</td><td>−7 + 4</td><td class="c">−3</td><td class="c"><span class="pill ok">mínimo</span></td></tr>
+      <tr><td class="c">0</td><td class="c">1</td><td>−6 + 4</td><td class="c">−2</td><td class="c"><span class="pill ok">sí</span></td></tr>
+      <tr><td class="c">1</td><td class="c">1</td><td>−7 − 6 + 8 + 4</td><td class="c">−1</td><td class="c"><span class="pill bad">no</span></td></tr>
+    </table></div>
+    <figure class="fig"><img src="img/ej1-energias.png" alt="Barras de objetivo y penalización para 00, 10, 01 y 11; la energía total mínima es −3 en 10" width="1400" height="924"></figure>
+  </div>
+  <div class="callout ok"><b>Solución:</b> energía mínima −3 en (x₁, x₂) = (1, 0) → se elige <b>A</b>, se cumple la restricción y energía = −beneficio.</div>
+</section>
+
+<section class="slide" id="s4-8" data-title="Matriz Q">
+  <span class="kicker">4.4 · Paso 6</span>
+  <h2>La matriz Q</h2>
+  <div class="cols">
+    <div style="display:flex;justify-content:center">
+      <div class="matrix" aria-label="Matriz Q: fila x1: −7, 8; fila x2: 0, −6">
+        <div class="h"></div><div class="h">x₁</div><div class="h">x₂</div>
+        <div class="h">x₁</div><div style="background:var(--indigo-soft);color:var(--indigo)">−7</div><div style="background:var(--bad-soft);color:var(--bad)">8</div>
+        <div class="h">x₂</div><div style="background:var(--surface-2);color:var(--muted)">0</div><div style="background:var(--indigo-soft);color:var(--indigo)">−6</div>
+      </div>
+    </div>
+    <div class="prose">
+      <ul>
+        <li><b>Diagonal Qᵢᵢ</b>: coeficientes lineales (−7 y −6). Caben ahí gracias a xᵢ² = xᵢ.</li>
+        <li><b>Fuera de la diagonal Qᵢⱼ</b>: coeficiente de x₁x₂ (8). Se usa la triangular superior.</li>
+        <li><b>Constante</b> (offset): +4, va aparte.</li>
+      </ul>
+      <div class="callout"><b>¿Hay que escribirla?</b> No: dimod la genera a partir de la fórmula (<code>H.linear</code>, <code>H.quadratic</code>). Solo hay que saber leerla.</div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s4-9" data-title="¿Y si P es pequeño?">
+  <span class="kicker">4.5</span>
+  <h2>¿Qué pasa si P es demasiado pequeño?</h2>
+  <figure class="fig"><img src="img/penalizacion-p.png" alt="Con P = 1 la combinación 11 tiene la energía mínima (−4, inválida); con P = 4 gana 10 (−3, válida)" width="1400" height="530"></figure>
+  <div class="cols" style="margin-top:12px">
+    <div class="tw"><table><tr><th class="c">P</th><th>Gana</th><th class="c">¿Válido?</th></tr>
+      <tr><td class="c">1</td><td>11 (A y B), H = −4</td><td class="c"><span class="pill bad">no</span></td></tr>
+      <tr><td class="c">2</td><td>empate 10 / 11, H = −3</td><td class="c"><span class="pill warn">dudoso</span></td></tr>
+      <tr><td class="c">4</td><td>10 (solo A), H = −3</td><td class="c"><span class="pill ok">sí</span></td></tr></table></div>
+    <div class="stack"><div class="callout warn"><b>Ni poco ni demasiado.</b> Un P enorme "aplana" el objetivo y al solver le cuesta distinguir las buenas soluciones.</div>
+      <a class="btn" href="#lab" data-preset="1">🧪 Pruébalo en el simulador QUBO</a></div>
+  </div>
+</section>
+
+<section class="slide" id="s4-10" data-title="Recetario de restricciones">
+  <span class="kicker">4.6</span>
+  <h2>Recetario de restricciones y reglas de oro</h2>
+  <div class="cols">
+    <div class="tw"><table>
+      <tr><th>Restricción</th><th>Penalización</th></tr>
+      <tr><td>Exactamente <b>k</b> de n</td><td><code>P(Σxᵢ − k)²</code></td></tr>
+      <tr><td>Como mucho uno de dos</td><td><code>P·xᵢ·xⱼ</code></td></tr>
+      <tr><td>Desigualdad Σwᵢxᵢ ≤ C</td><td><code>P(Σwᵢxᵢ + s − C)²</code><br><small>s = y₀ + 2y₁ + 4y₂… (holgura)</small></td></tr>
+      <tr><td>xᵢ y xⱼ distintos (XOR)</td><td>objetivo <code>xᵢ + xⱼ − 2xᵢxⱼ</code></td></tr>
+      <tr><td>xᵢ y xⱼ iguales</td><td><code>P(xᵢ + xⱼ − 2xᵢxⱼ)</code></td></tr>
+    </table></div>
+    <div class="tw"><table>
+      <tr><th>Regla</th><th>Por qué</th></tr>
+      <tr><td>Variables {0,1}</td><td>Lenguaje nativo del hardware</td></tr>
+      <tr><td><b>Siempre minimizar</b></td><td>max f = min −f</td></tr>
+      <tr><td>Restricción → P·(…)²</td><td>0 si se cumple, positiva si no</td></tr>
+      <tr><td>P &gt; beneficio máximo</td><td>Incumplir nunca compensa</td></tr>
+      <tr><td>xᵢ² = xᵢ</td><td>Simplifica (DADK lo hace solo)</td></tr>
+      <tr><td>Comprobar penalización = 0</td><td>Solución factible</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<!-- ═════════════════════════════ UNIDAD 5 ═════════════════════════════ -->
+<section class="slide unit-cover" id="u5" data-title="Unidad 5 · Programar con dimod" data-unit="5">
+  <div class="num">05</div>
+  <div>
+    <span class="kicker">Unidad 5</span>
+    <h2>Programar QUBO en Python con D-Wave Ocean (dimod)</h2>
+    <p class="lead">Del papel al código: escribes la fórmula tal cual y la librería hace el resto.</p>
+    <ul><li>Qué es Ocean y qué instalamos</li><li>Las piezas de dimod</li><li>Código completo comentado</li><li>Parámetros del solver y comprobaciones</li></ul>
+  </div>
+</section>
+
+<section class="slide" id="s5-1" data-title="Las piezas de dimod">
+  <span class="kicker">5.1</span>
+  <h2>Las piezas de dimod</h2>
+  <div class="cols wide-r">
+    <div class="prose">
+      <p><b>Ocean</b> es el conjunto de librerías Python de D-Wave. Es <b>software libre</b> y se instala con <code>pip</code>, sin cuenta:</p>
+      <div class="codewrap"><pre class="sh"><code>pip install dimod dwave-samplers</code></pre></div>
+      <ul><li><code>dimod</code>: variables binarias, modelo QUBO y fuerza bruta.</li><li><code>dwave-samplers</code>: recocido simulado rápido (C++).</li></ul>
+      <div class="callout copper"><b>Misma formulación, cualquier máquina.</b> El modelo que resolvemos en el portátil se podría enviar sin cambios a un ordenador cuántico de D-Wave (nube Leap) o, con la librería de Fujitsu, al Digital Annealer.</div>
+    </div>
+    <div class="tw"><table>
+      <tr><th>Pieza</th><th>Para qué sirve</th></tr>
+      <tr><td><code>dimod.Binary("A")</code></td><td>Variable binaria llamada A (0 o 1)</td></tr>
+      <tr><td><code>+ − * **2</code></td><td>Se combinan como en papel</td></tr>
+      <tr><td><code>H = objetivo + restriccion</code></td><td>El QUBO (<code>BinaryQuadraticModel</code>); expande y aplica x² = x</td></tr>
+      <tr><td><code>H.linear</code> / <code>H.quadratic</code> / <code>H.offset</code></td><td>Coeficientes y constante</td></tr>
+      <tr><td><code>H.energy(sample)</code></td><td>Energía de una combinación</td></tr>
+      <tr><td><code>dimod.ExactSolver().sample(H)</code></td><td>Fuerza bruta (problemas pequeños)</td></tr>
+      <tr><td><code>SimulatedAnnealingSampler().sample(H, num_reads, num_sweeps)</code></td><td>Recocido simulado: runs × iteraciones</td></tr>
+      <tr><td><code>resultado.first.sample</code> / <code>.energy</code></td><td>Mejor combinación y su energía</td></tr>
+      <tr><td><code>resultado.aggregate()</code> → <code>num_occurrences</code></td><td>Frecuencia de cada solución</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<section class="slide" id="s5-2" data-title="Código del ejemplo">
+  <span class="kicker">5.2</span>
+  <h2>El ejemplo A/B en Python</h2>
+  <div class="cols wide-l">
+    <div class="codewrap"><pre class="py"><code>import dimod
+from dwave.samplers import SimulatedAnnealingSampler
+
+# 1. Datos
+beneficio_A, beneficio_B = 3, 2
+P = 4                                   # P &gt; max(beneficios)
+
+# 2. Variables binarias
+x_A = dimod.Binary("A")                 # 1 si elijo A
+x_B = dimod.Binary("B")                 # 1 si elijo B
+
+# 3. Objetivo (maximizar → minimizar el negativo)
+objetivo = -beneficio_A * x_A - beneficio_B * x_B
+
+# 4. Penalización: exactamente uno
+restriccion = P * (x_A + x_B - 1) ** 2
+
+# 5. Hamiltoniano (el QUBO)
+H = objetivo + restriccion
+print(dict(H.linear), dict(H.quadratic), H.offset)
+
+# 6. Resolver (10 runs de 100 iteraciones)
+sampler = SimulatedAnnealingSampler()
+resultado = sampler.sample(H, num_reads=10, num_sweeps=100)
+
+# 7. Interpretar
+mejor = resultado.first
+cfg = mejor.sample                      # {'A': 1, 'B': 0}
+print("A:", cfg["A"], "B:", cfg["B"])
+print("Energía:", mejor.energy)                  # -3.0
+print("Penalización:", restriccion.energy(cfg))  # 0.0</code></pre></div>
+    <div class="stack">
+      <p>Salida del programa:</p>
+      <pre><code>{'A': -7.0, 'B': -6.0} {('B', 'A'): 8.0} 4.0
+A: 1 B: 0
+Energía: -3.0
+Penalización: 0.0</code></pre>
+      <p>Y con fuerza bruta, <code>print(dimod.ExactSolver().sample(H))</code>:</p>
+      <pre><code>   A  B energy num_oc.
+1  1  0   -3.0       1
+2  0  1   -2.0       1
+3  1  1   -1.0       1
+0  0  0    4.0       1</code></pre>
+      <div class="callout ok"><b>Lectura:</b> A = 1, B = 0, energía −3 = −beneficio, penalización 0 → se elige <b>A</b>.</div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s5-3" data-title="Cómo busca el solver">
+  <span class="kicker">5.3</span>
+  <h2>Cómo busca el solver: los parámetros</h2>
+  <div class="cols wide-r">
+    <div class="prose">
+      <p>El solver <b>no calcula</b> que 3 es mayor que 2. Convierte las opciones en un <b>paisaje de energía</b>: la mejor solución (elegir A, −3) es el <b>valle más profundo</b> y la segunda (elegir B, −2) un valle algo menos profundo.</p>
+      <p>Después lanza una <b>"canica"</b> que rueda por ese paisaje mientras la temperatura baja, como en el recocido de la unidad 3.</p>
+      <div class="tw"><table>
+        <tr><th>Combinación</th><th class="c">00</th><th class="c">10 (A)</th><th class="c">01 (B)</th><th class="c">11</th></tr>
+        <tr><td>Energía</td><td class="c">4</td><td class="c" style="background:var(--ok-soft);color:var(--ok);font-weight:700">−3</td><td class="c">−2</td><td class="c">−1</td></tr>
+      </table></div>
+      <p style="color:var(--muted);font-size:.92em;margin-top:.6em">Con 2 variables solo hay 4 "puntos" en el paisaje; en problemas reales hay millones.</p>
+    </div>
+    <div class="stack" style="gap:10px">
+      <div class="card"><span class="tag">num_reads · intentos</span><p style="margin:0">Cuántas veces se lanza la canica desde un punto <b>al azar</b>. Con <code>num_reads=10</code> hay 10 intentos independientes; en el ejemplo A/B los 10 acaban en el valle de A, así que A aparece <b>10 veces</b>.</p></div>
+      <div class="card"><span class="tag">num_sweeps · barridos</span><p style="margin:0">Cuántos pasos da la canica en cada intento. En <b>un sweep</b> el algoritmo revisa <b>cada variable una vez</b>: "¿mejora si cambio A?", "¿y si cambio B?". Para 2 variables, 100 sweeps sobran: encuentra A en los primeros pasos y el resto confirma que no hay un valle mejor.</p></div>
+      <div class="card"><span class="tag">beta_range · temperatura</span><p style="margin:0">β = 1/T. Al principio (T alta) la canica puede <b>subir</b> a soluciones peores, como B, para no quedarse atascada; al final (T baja) <b>solo baja</b> y se asienta. Si no se indica, se calcula sola a partir de los coeficientes.</p></div>
+      <div class="card"><span class="tag">seed · semilla</span><p style="margin:0">El punto de salida y los saltos son aleatorios. Con <code>seed=42</code> los números "aleatorios" son siempre los mismos: <b>mismo resultado en cada ejecución</b>, útil para corregir prácticas.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s5-3b" data-title="Comprobar el resultado">
+  <span class="kicker">5.3 · comprobaciones</span>
+  <h2>Comprobar el resultado</h2>
+  <div class="codewrap"><pre class="py"><code>resultado = SimulatedAnnealingSampler().sample(H, num_reads=10, num_sweeps=100, seed=42)
+mejor = resultado.first                        # menor energía
+print(mejor.sample, mejor.energy)              # {'A': 1, 'B': 0} -3.0
+print(restriccion.energy(mejor.sample))        # 0.0 → cumple
+print(resultado.aggregate().first.num_occurrences)   # 10 → en los 10 intentos</code></pre></div>
+  <div class="cols3" style="margin-top:14px">
+    <div class="card tint"><b>1 · ¿Cumple?</b><p><code>restriccion.energy(cfg) == 0</code>. Si no es 0, la solución incumple alguna restricción.</p></div>
+    <div class="card tint"><b>2 · ¿Tiene sentido?</b><p>Con penalización 0, la energía es −beneficio o el coste. Léela en voz alta: "se elige A, beneficio 3".</p></div>
+    <div class="card tint"><b>3 · ¿Sale algo inválido?</b><p>Sube P. Si aun así falla, sube <code>num_sweeps</code> o <code>num_reads</code>.</p></div>
+  </div>
+  <div class="callout"><b>Prueba de oro:</b> en problemas de hasta ~20 variables, <code>dimod.ExactSolver().sample(H)</code> prueba todas las combinaciones y da el óptimo exacto para comparar.</div>
+</section>
+
+<section class="slide" id="s5-4" data-title="Del problema al código">
+  <span class="kicker">5.4 · Resumen</span>
+  <h2>Del problema al código</h2>
+  <div class="tw"><table>
+    <tr><th>Problema real</th><th>QUBO</th><th>dimod</th></tr>
+    <tr><td>"¿Elegir A o B?"</td><td>x_A, x_B ∈ {0,1}</td><td><code>dimod.Binary("A")</code>, <code>dimod.Binary("B")</code></td></tr>
+    <tr><td>"maximizar beneficio"</td><td>−(3x_A + 2x_B)</td><td><code>-3*x_A - 2*x_B</code></td></tr>
+    <tr><td>"solo uno"</td><td>P·(x_A + x_B − 1)²</td><td><code>P * (x_A + x_B - 1)**2</code></td></tr>
+    <tr><td>"resolver"</td><td>minimizar H</td><td><code>sampler.sample(H, num_reads=10)</code></td></tr>
+    <tr><td>"leer resultado"</td><td>bits de la solución</td><td><code>resultado.first.sample</code></td></tr>
+  </table></div>
+  <div class="callout copper" style="margin-top:14px"><b>¿Y en el Digital Annealer de Fujitsu?</b> Su librería <b>DADK</b> sigue la misma idea con otros nombres: <code>Term(1, 0)</code> por <code>dimod.Binary("A")</code>, <code>QUBOSolverCPU(number_runs, number_iterations)</code> por <code>SimulatedAnnealingSampler().sample(H, num_reads, num_sweeps)</code>. Lo importante es la <b>formulación QUBO</b>, que es la misma.</div>
+  <details><summary>Preguntas de repaso</summary><ol>
+    <li>¿Qué devuelve <code>dimod.Binary("A")</code>? → <b>Una variable binaria que se suma y multiplica como en papel.</b></li>
+    <li>¿Para qué sirve <code>ExactSolver</code>? → <b>Fuerza bruta: exacto, pero inviable a partir de ~20 variables.</b></li>
+    <li><code>num_reads</code> vs <code>num_sweeps</code> → <b>runs independientes vs iteraciones dentro de cada run.</b></li>
+    <li>Si <code>restriccion.energy(cfg)</code> vale 4… → <b>la solución incumple una restricción.</b></li></ol></details>
+</section>
+
+<!-- ═════════════════════════════ UNIDAD 6 ═════════════════════════════ -->
+<section class="slide" id="u6" data-title="Unidad 6 · Glosario" data-unit="6">
+  <span class="kicker">Unidad 6</span>
+  <h2>Glosario</h2>
+  <label for="glQ" class="sr" style="position:absolute;left:-9999px">Buscar término</label>
+  <input id="glQ" class="gl-search" type="search" placeholder="Buscar: qubit, penalización, Zephyr…">
+  <div class="tabs" id="glTabs" role="tablist" style="margin-top:.6em"></div>
+  <div class="gl" id="glList"></div>
+</section>
+
+<!-- ═════════════════════════════ UNIDAD 7 ═════════════════════════════ -->
+<section class="slide unit-cover" id="u7" data-title="Unidad 7 · Prácticas" data-unit="7">
+  <div class="num">07</div>
+  <div>
+    <span class="kicker">Unidad 7</span>
+    <h2>Prácticas: entorno y simulador</h2>
+    <p class="lead">Montar un entorno Python, resolver QUBO en local y practicar con 6 ejercicios guiados.</p>
+    <ul><li>Práctica 0: preparar el entorno y tabla de comandos</li><li>Simulador QUBO en el navegador</li><li>Método de 7 pasos</li><li>5 ejercicios guiados + 1 de ampliación, con código comentado</li><li>Descargas, plantilla de entrega y rúbrica</li></ul>
+  </div>
+</section>
+
+<section class="slide" id="p0" data-title="Práctica 0 · Entorno">
+  <span class="kicker">Práctica 0</span>
+  <h2>Preparar el entorno de programación</h2>
+  <p class="lead">Un único entorno para todo el módulo: <b>Python + dimod + dwave-samplers</b>. Software libre, se instala con <code>pip</code>. Python es interpretado: no se compila, se ejecuta con <code>python archivo.py</code>.</p>
+  <div class="cols3">
+    <div class="card"><span class="tag">1</span><h3>Python y editor</h3><ul><li><b>Python 3.11 o 3.12</b> desde <a href="https://www.python.org/downloads/">python.org</a>. En Windows marca <i>Add python.exe to PATH</i>.</li><li><b>VS Code</b> con las extensiones <b>Python</b> y <b>Jupyter</b>.</li></ul></div>
+    <div class="card"><span class="tag">2</span><h3>Entorno virtual</h3><p>Aísla las librerías del proyecto, como un contenedor aísla una aplicación. Se crea una vez y se <b>activa</b> en cada terminal nueva: el prompt muestra <code>(qubo)</code>.</p></div>
+    <div class="card"><span class="tag">3</span><h3>Librerías</h3><div class="codewrap"><pre class="sh"><code>pip install dimod dwave-samplers
+pip install matplotlib networkx</code></pre></div><p style="font-size:.9em;color:var(--muted)">dimod: modelo QUBO y fuerza bruta · dwave-samplers: recocido rápido · matplotlib/networkx: gráficos (ej. 4 y 7).</p></div>
+  </div>
+  <div class="cols" style="margin-top:14px">
+    <div class="callout"><b>Sin instalar nada:</b> <a href="https://colab.research.google.com">Google Colab</a>, primera celda <code>!pip install dimod dwave-samplers</code>, y pega el código de cada ejercicio en una celda.</div>
+    <div class="callout copper"><b>Nube cuántica real (opcional):</b> <code>pip install dwave-ocean-sdk</code> y una cuenta en D-Wave Leap permiten enviar el mismo modelo a una QPU.</div>
+  </div>
+</section>
+
+<section class="slide" id="p0cmd" data-title="Tabla de comandos Windows / Linux">
+  <span class="kicker">Práctica 0 · chuleta</span>
+  <h2>Tabla de comandos: Windows y Linux</h2>
+  <div class="tw"><table class="cmd">
+    <tr><th>Acción</th><th>Windows (PowerShell)</th><th>Linux / macOS (bash)</th></tr>
+    <tr><td>Comprobar Python</td><td><code>python --version</code></td><td><code>python3 --version</code></td></tr>
+    <tr><td>Instalar Python si falta</td><td>python.org (marcar <i>Add to PATH</i>)</td><td><code>sudo apt install python3 python3-venv python3-pip</code></td></tr>
+    <tr><td>Carpeta del proyecto</td><td><code>mkdir quantum-annealing; cd quantum-annealing</code></td><td><code>mkdir quantum-annealing &amp;&amp; cd quantum-annealing</code></td></tr>
+    <tr><td>Crear entorno virtual</td><td><code>python -m venv qubo</code></td><td><code>python3 -m venv qubo</code></td></tr>
+    <tr><td><b>Activar</b> entorno</td><td><code>.\qubo\Scripts\Activate.ps1</code> · CMD: <code>qubo\Scripts\activate.bat</code></td><td><code>source qubo/bin/activate</code></td></tr>
+    <tr><td>Si PowerShell lo bloquea</td><td><code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code></td><td>—</td></tr>
+    <tr><td>Actualizar pip</td><td colspan="2"><code>python -m pip install --upgrade pip</code></td></tr>
+    <tr><td><b>Instalar librerías</b></td><td colspan="2"><code>pip install dimod dwave-samplers matplotlib networkx</code></td></tr>
+    <tr><td>Ver librerías instaladas</td><td colspan="2"><code>pip list</code></td></tr>
+    <tr><td><b>Ejecutar un ejercicio</b></td><td colspan="2"><code>python ejercicio1_beneficio.py</code></td></tr>
+    <tr><td>Guardar la salida</td><td colspan="2"><code>python ejercicio1_beneficio.py &gt; salida.txt</code></td></tr>
+    <tr><td>Abrir VS Code aquí</td><td colspan="2"><code>code .</code></td></tr>
+    <tr><td>Jupyter (opcional)</td><td colspan="2"><code>pip install jupyter ipykernel</code> → <code>jupyter notebook</code></td></tr>
+    <tr><td>Desactivar entorno</td><td colspan="2"><code>deactivate</code></td></tr>
+  </table></div>
+</section>
+
+<section class="slide" id="p0b" data-title="Práctica 0 · Prueba">
+  <span class="kicker">Práctica 0 · paso 4</span>
+  <h2>Prueba de funcionamiento</h2>
+  <div class="cols">
+    <div class="codewrap"><pre class="py"><code>&quot;&quot;&quot;Práctica 0 (opción D-Wave) — comprobación del entorno.&quot;&quot;&quot;
+import sys, dimod
+from dwave.samplers import SimulatedAnnealingSampler
+print(&quot;Python&quot;, sys.version.split()[0], &quot;| dimod&quot;, dimod.__version__)
+a, b = dimod.Binary(&quot;A&quot;), dimod.Binary(&quot;B&quot;)
+H = -3*a - 2*b + 4*(a + b - 1)**2
+print(&quot;H lineal:&quot;, dict(H.linear), &quot;| cuadrático:&quot;, dict(H.quadratic), &quot;| offset:&quot;, H.offset)
+sol = SimulatedAnnealingSampler().sample(H, num_reads=4).first
+print(&quot;Mejor:&quot;, sol.sample, &quot;Energía:&quot;, sol.energy)</code></pre></div>
+    <div class="stack">
+      <p>Ejecuta <code>python prueba_entorno.py</code>. Salida esperada:</p>
+      <pre><code>Python 3.12.x | dimod 0.12.x
+H lineal: {'A': -7.0, 'B': -6.0} | cuadrático: {('B', 'A'): 8.0} | offset: 4.0
+Mejor: {'A': 1, 'B': 0} Energía: -3.0</code></pre>
+      <div class="callout ok"><b>Entregable.</b> Captura con el entorno activado, la versión de Python y la salida del script.</div>
+      <div class="callout warn"><b>Si falla el import:</b> comprueba que el entorno está activado (<code>(qubo)</code> en el prompt) y repite <code>pip install dimod dwave-samplers</code>.</div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="lab" data-title="Simulador QUBO">
+  <span class="kicker">Simulador QUBO</span>
+  <h2>Laboratorio QUBO en el navegador</h2>
+  <div class="widget">
+    <div class="wt">Elige un ejercicio, cambia los datos y resuelve</div>
+    <div class="ctrl">
+      <label for="labPreset">Ejercicio <select id="labPreset"></select></label>
+      <span id="labInfo" style="color:var(--muted)"></span>
+    </div>
+    <div class="lab-grid">
+      <div class="stack">
+        <div class="lab-params" id="labParams"></div>
+        <div class="ctrl">
+          <label for="labRuns">Runs <input type="number" id="labRuns" min="1" max="200" value="16"></label>
+          <label for="labIt">Iteraciones <input type="number" id="labIt" min="10" max="50000" value="1000"></label>
+        </div>
+        <div class="ctrl"><button class="btn primary" id="labSolve" type="button">▶ Resolver (annealing)</button><button class="btn" id="labExact" type="button">Fuerza bruta</button></div>
+        <div><b>Hamiltoniano H expandido</b> <span id="labN" class="pill warn"></span><div class="poly" id="labPoly"></div></div>
+        <div id="labQwrap"><b>Matriz Q</b> <small style="color:var(--muted)">(la genera la librería · azul = negativo, rojo = positivo)</small><div class="tw" style="border:none;padding:4px"><table class="qm" id="labQ"></table></div></div>
+      </div>
+      <div class="stack">
+        <div id="labSummary" aria-live="polite"></div>
+        <div class="tw"><table class="res" id="labRes"></table></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="e-guia" data-title="Cómo resolver un ejercicio">
+  <span class="kicker">Ejercicios · método</span>
+  <h2>Cómo resolver cualquier ejercicio: 7 pasos</h2>
+  <p class="lead">Todos los ejercicios siguen la <b>misma plantilla</b>. El código está dividido en estos bloques, con comentarios en cada uno.</p>
+  <div class="steps">
+    <div style="background:#495066">Datos<small>tabla del enunciado</small></div>
+    <div style="background:#3c4fc4">Variables<small>dimod.Binary</small></div>
+    <div style="background:#3c4fc4">Objetivo<small>coste o −beneficio</small></div>
+    <div style="background:#c33333">Restricción<small>P·(…)²</small></div>
+    <div style="background:#b25f25">H<small>objetivo + restricción</small></div>
+    <div style="background:#0b8763">Resolver<small>sampler.sample</small></div>
+    <div style="background:#495066">Interpretar<small>¿penalización 0?</small></div>
+  </div>
+  <div class="tw" style="margin-top:16px"><table>
+    <tr><th>Ejercicio</th><th class="c">Variables</th><th>Qué se practica</th></tr>
+    <tr><td><a href="#e1">1 · Elegir proyecto</a></td><td class="c">2</td><td>Maximizar en negativo y "exactamente uno"</td></tr>
+    <tr><td><a href="#e2">2 · Servidores encendidos</a></td><td class="c">4</td><td>Minimizar un coste y "exactamente K"</td></tr>
+    <tr><td><a href="#e3">3 · Reparto de tareas</a></td><td class="c">6</td><td>Una restricción por cada tarea</td></tr>
+    <tr><td><a href="#e4">4 · Equilibrar VMs</a></td><td class="c">4</td><td>Objetivo al cuadrado, sin restricciones</td></tr>
+    <tr><td><a href="#e5">5 · Max-Cut</a></td><td class="c">7</td><td>Fórmula de "distintos" (XOR) en un grafo</td></tr>
+    <tr><td><a href="#e6">6 · Max-Cut N nodos</a> <span class="pill warn">ampliación</span></td><td class="c">N</td><td>Qué pasa cuando el problema crece</td></tr>
+  </table></div>
+</section>
+
+<section class="slide" id="e1" data-title="Ejercicio 1 · Elegir proyecto">
+  <span class="kicker">Ejercicio 1 · 2 variables</span>
+  <h2>Elegir el proyecto con más beneficio</h2>
+  <div class="cols">
+    <div class="prose">
+      <p>Solo podemos hacer <b>uno</b> de dos proyectos: A (beneficio 3) o B (beneficio 2).</p>
+      <div class="tw"><table>
+        <tr><td>Variables</td><td>x_A, x_B (1 = lo elijo)</td></tr>
+        <tr><td>Objetivo</td><td>−3·x_A − 2·x_B &nbsp;<small>(maximizar → en negativo)</small></td></tr>
+        <tr><td>Restricción</td><td>4·(x_A + x_B − 1)² &nbsp;<small>(exactamente uno)</small></td></tr>
+      </table></div>
+      <div class="callout ok"><b>Resultado:</b> x_A = 1, x_B = 0 → <b>proyecto A</b>, energía −3, penalización 0.</div>
+      <a class="btn" href="#lab" data-preset="1">🧪 Abrir en el simulador</a>
+    </div>
+    <div class="prose">
+      <details class="code"><summary>Código completo · <code>ejercicio1_beneficio.py</code></summary><div class="codewrap"><pre class="py"><code>&quot;&quot;&quot;
+Ejercicio 1 · Elegir el proyecto con más beneficio            (2 variables)
+============================================================================
+Tenemos dos proyectos y solo podemos hacer UNO:
+    Proyecto A → beneficio 3
+    Proyecto B → beneficio 2
+¿Cuál elegimos? (La respuesta es obvia: A. Sirve para aprender el método.)
+
+Ejecutar:  python ejercicio1_beneficio.py
+&quot;&quot;&quot;
+import dimod
+from dwave.samplers import SimulatedAnnealingSampler
+
+# ── 1. DATOS ────────────────────────────────────────────────────────────
+beneficio_A = 3
+beneficio_B = 2
+P = 4               # peso de la penalización: mayor que el beneficio máximo (3)
+
+# ── 2. VARIABLES BINARIAS: una por cada decisión SÍ/NO ─────────────────
+x_A = dimod.Binary(&quot;A&quot;)      # vale 1 si elijo el proyecto A, 0 si no
+x_B = dimod.Binary(&quot;B&quot;)      # vale 1 si elijo el proyecto B, 0 si no
+
+# ── 3. OBJETIVO ─────────────────────────────────────────────────────────
+# Queremos MAXIMIZAR el beneficio, pero el solver siempre MINIMIZA.
+# Truco: lo escribimos en negativo → más beneficio = energía más baja.
+objetivo = -beneficio_A * x_A - beneficio_B * x_B
+
+# ── 4. RESTRICCIÓN → PENALIZACIÓN ───────────────────────────────────────
+# &quot;Exactamente uno&quot;:  x_A + x_B = 1
+# Al elevar al cuadrado vale 0 si se cumple y algo positivo si no.
+restriccion = P * (x_A + x_B - 1) ** 2
+
+# ── 5. HAMILTONIANO H = objetivo + penalización (esto es el QUBO) ───────
+H = objetivo + restriccion
+print(&quot;Modelo QUBO generado por dimod:&quot;)
+print(&quot;  lineal    :&quot;, dict(H.linear))       # {&#x27;A&#x27;: -7.0, &#x27;B&#x27;: -6.0}
+print(&quot;  cuadrático:&quot;, dict(H.quadratic))    # {(&#x27;B&#x27;, &#x27;A&#x27;): 8.0}
+print(&quot;  constante :&quot;, H.offset)             # 4.0
+
+# ── 6. RESOLVER ─────────────────────────────────────────────────────────
+# Con solo 2 variables podemos ver TODAS las combinaciones (fuerza bruta):
+print(&quot;\nTodas las combinaciones, de mejor a peor:&quot;)
+print(dimod.ExactSolver().sample(H))
+
+# Y con el recocido simulado (lo que usaríamos en problemas grandes):
+sampler = SimulatedAnnealingSampler()
+resultado = sampler.sample(H, num_reads=10, seed=42)   # 10 intentos
+
+# ── 7. INTERPRETAR Y COMPROBAR ──────────────────────────────────────────
+mejor = resultado.first        # la muestra con menor energía
+cfg = mejor.sample             # diccionario, p. ej. {&#x27;A&#x27;: 1, &#x27;B&#x27;: 0}
+
+print(&quot;\nMejor solución:&quot;, cfg)
+if cfg[&quot;A&quot;] == 1:
+    print(&quot;→ Se elige el proyecto A&quot;)
+if cfg[&quot;B&quot;] == 1:
+    print(&quot;→ Se elige el proyecto B&quot;)
+print(&quot;Energía:&quot;, mejor.energy, &quot;(= −beneficio)&quot;)
+print(&quot;Penalización:&quot;, restriccion.energy(cfg), &quot;(0 = cumple la restricción)&quot;)</code></pre></div></details>
+      <details><summary>Retos</summary><ol><li>Cambia <code>P</code> a 1, 2 y 4. ¿Qué solución sale? → <b>P=1: los dos (inválido) · P=2: empate · P=4: A.</b></li><li>Añade un proyecto C con beneficio 5. ¿Qué P usarías? → <b>P = 6 (mayor que 5). Sale C.</b></li></ol></details>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="e2" data-title="Ejercicio 2 · Servidores">
+  <span class="kicker">Ejercicio 2 · 4 variables</span>
+  <h2>Dejar encendidos 2 de 4 servidores</h2>
+  <div class="cols">
+    <div class="prose">
+      <p>Por la noche bastan <b>2 servidores</b>. ¿Cuáles dejamos encendidos para consumir lo mínimo?</p>
+      <div class="tw"><table><tr><th>Servidor</th><th class="c">S1</th><th class="c">S2</th><th class="c">S3</th><th class="c">S4</th></tr>
+        <tr><td>Consumo (W)</td><td class="c">120</td><td class="c">90</td><td class="c">150</td><td class="c">80</td></tr></table></div>
+      <div class="tw" style="margin-top:10px"><table>
+        <tr><td>Variables</td><td>x_S1 … x_S4 (1 = encendido)</td></tr>
+        <tr><td>Objetivo</td><td>120·x_S1 + 90·x_S2 + 150·x_S3 + 80·x_S4 &nbsp;<small>(ya es minimizar)</small></td></tr>
+        <tr><td>Restricción</td><td>500·(x_S1 + x_S2 + x_S3 + x_S4 − 2)²</td></tr>
+      </table></div>
+      <div class="callout warn"><b>¿Por qué P = 500?</b> Apagarlo todo cuesta 0 W. La multa por incumplir debe ser mayor que cualquier ahorro posible: P mayor que la suma de consumos (440).</div>
+    </div>
+    <div class="stack">
+      <figure class="fig"><img src="img/ej-servidores.png" alt="Barras de consumo: S2 (90 W) y S4 (80 W) encendidos, total 170 W" width="1300" height="640"></figure>
+      <div class="callout ok"><b>Resultado:</b> <b>S2 + S4</b> encendidos → 170 W, penalización 0.</div>
+      <details class="code"><summary>Código completo · <code>ejercicio2_servidores.py</code></summary><div class="codewrap"><pre class="py"><code>&quot;&quot;&quot;
+Ejercicio 2 · Dejar encendidos 2 de 4 servidores               (4 variables)
+============================================================================
+Por la noche solo hacen falta 2 servidores encendidos.
+Queremos elegir EXACTAMENTE 2 con el menor consumo total.
+
+    Servidor   Consumo (W)
+    S1         120
+    S2          90
+    S3         150
+    S4          80
+
+Ejecutar:  python ejercicio2_servidores.py
+&quot;&quot;&quot;
+import dimod
+from dwave.samplers import SimulatedAnnealingSampler
+
+# ── 1. DATOS ────────────────────────────────────────────────────────────
+consumo = {&quot;S1&quot;: 120, &quot;S2&quot;: 90, &quot;S3&quot;: 150, &quot;S4&quot;: 80}
+K = 2               # cuántos servidores deben quedar encendidos
+P = 500             # penalización: mayor que la suma de todos los consumos (440)
+
+# ── 2. VARIABLES BINARIAS: una por servidor ─────────────────────────────
+# x[&quot;S1&quot;] = 1 → S1 encendido ; 0 → apagado
+x = {s: dimod.Binary(s) for s in consumo}
+
+# ── 3. OBJETIVO: consumo total de los encendidos ────────────────────────
+# Ya es algo que queremos MINIMIZAR, así que no hace falta signo negativo.
+objetivo = sum(consumo[s] * x[s] for s in consumo)
+
+# ── 4. RESTRICCIÓN: exactamente K encendidos ────────────────────────────
+#   x_S1 + x_S2 + x_S3 + x_S4 = 2   →   P · (suma − 2)²
+encendidos = sum(x.values())
+restriccion = P * (encendidos - K) ** 2
+
+# ── 5. HAMILTONIANO ─────────────────────────────────────────────────────
+H = objetivo + restriccion
+
+# ── 6. RESOLVER ─────────────────────────────────────────────────────────
+resultado = SimulatedAnnealingSampler().sample(H, num_reads=20, seed=42)
+
+# ── 7. INTERPRETAR Y COMPROBAR ──────────────────────────────────────────
+cfg = resultado.first.sample
+elegidos = [s for s in consumo if cfg[s] == 1]
+print(&quot;Servidores encendidos:&quot;, elegidos)
+print(&quot;Consumo total:&quot;, objetivo.energy(cfg), &quot;W&quot;)
+print(&quot;Penalización:&quot;, restriccion.energy(cfg), &quot;(0 = hay exactamente&quot;, K, &quot;encendidos)&quot;)</code></pre></div></details>
+      <details><summary>Retos</summary><ol><li>Pon <code>K = 3</code>. → <b>S1 + S2 + S4 = 290 W.</b></li><li>Pon <code>P = 50</code>. ¿Qué pasa? → <b>Sale solo S4 (80 + 50 = 130 &lt; 170): ¡inválido!</b> P era demasiado pequeño.</li></ol></details>
+      <a class="btn" href="#lab" data-preset="2">🧪 Abrir en el simulador</a>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="e3" data-title="Ejercicio 3 · Tareas">
+  <span class="kicker">Ejercicio 3 · 6 variables</span>
+  <h2>Repartir tareas entre dos técnicos</h2>
+  <div class="cols">
+    <div class="prose">
+      <div class="tw"><table><tr><th>Horas</th><th class="c">Ana</th><th class="c">Beñat</th></tr>
+        <tr><td>DNS</td><td class="c">4</td><td class="c">5</td></tr><tr><td>VLAN</td><td class="c">6</td><td class="c">2</td></tr><tr><td>Backup</td><td class="c">3</td><td class="c">7</td></tr></table></div>
+      <div class="tw" style="margin-top:10px"><table>
+        <tr><td>Variables</td><td>una por pareja: x(Ana,DNS), x(Beñat,DNS)… → 6</td></tr>
+        <tr><td>Objetivo</td><td>Σ horas · x &nbsp;<small>(ya es minimizar)</small></td></tr>
+        <tr><td>Restricción</td><td>por cada tarea: 20·(x(Ana,t) + x(Beñat,t) − 1)²</td></tr>
+      </table></div>
+      <p style="margin-top:.6em">Hay <b>tres</b> restricciones, una por tarea; se suman todas.</p>
+    </div>
+    <div class="stack">
+      <figure class="fig"><img src="img/ej5-asignacion.png" alt="Asignación: Ana hace DNS y Backup, Beñat hace VLAN; coste 9" width="1180" height="690"></figure>
+      <div class="callout ok"><b>Resultado:</b> DNS → Ana, VLAN → Beñat, Backup → Ana · <b>9 horas</b>.</div>
+      <details class="code"><summary>Código completo · <code>ejercicio3_tareas.py</code></summary><div class="codewrap"><pre class="py"><code>&quot;&quot;&quot;
+Ejercicio 3 · Repartir tareas entre dos técnicos               (6 variables)
+============================================================================
+Hay 3 tareas y 2 técnicos. Cada tarea la hace UNA persona.
+Queremos el reparto con menos horas en total.
+
+    Horas      Ana   Beñat
+    DNS         4      5
+    VLAN        6      2
+    Backup      3      7
+
+Ejecutar:  python ejercicio3_tareas.py
+&quot;&quot;&quot;
+import dimod
+from dwave.samplers import SimulatedAnnealingSampler
+
+# ── 1. DATOS ────────────────────────────────────────────────────────────
+personas = [&quot;Ana&quot;, &quot;Beñat&quot;]
+tareas = [&quot;DNS&quot;, &quot;VLAN&quot;, &quot;Backup&quot;]
+horas = {
+    (&quot;Ana&quot;, &quot;DNS&quot;): 4,   (&quot;Ana&quot;, &quot;VLAN&quot;): 6,   (&quot;Ana&quot;, &quot;Backup&quot;): 3,
+    (&quot;Beñat&quot;, &quot;DNS&quot;): 5, (&quot;Beñat&quot;, &quot;VLAN&quot;): 2, (&quot;Beñat&quot;, &quot;Backup&quot;): 7,
+}
+P = 20              # penalización: mayor que cualquier coste de la tabla (7)
+
+# ── 2. VARIABLES BINARIAS: una por cada pareja (persona, tarea) ─────────
+# x[(&quot;Ana&quot;, &quot;DNS&quot;)] = 1  →  Ana hace la tarea DNS
+x = {}
+for p in personas:
+    for t in tareas:
+        x[(p, t)] = dimod.Binary(f&quot;{p}-{t}&quot;)
+
+# ── 3. OBJETIVO: horas totales del reparto ──────────────────────────────
+objetivo = sum(horas[k] * x[k] for k in x)
+
+# ── 4. RESTRICCIÓN: cada tarea la hace exactamente una persona ──────────
+#   Para DNS:   x(Ana,DNS) + x(Beñat,DNS) = 1   → (… − 1)²
+#   y lo mismo para VLAN y Backup. Sumamos las tres penalizaciones.
+restriccion = 0
+for t in tareas:
+    personas_en_t = x[(&quot;Ana&quot;, t)] + x[(&quot;Beñat&quot;, t)]
+    restriccion = restriccion + P * (personas_en_t - 1) ** 2
+
+# ── 5. HAMILTONIANO ─────────────────────────────────────────────────────
+H = objetivo + restriccion
+
+# ── 6. RESOLVER ─────────────────────────────────────────────────────────
+resultado = SimulatedAnnealingSampler().sample(H, num_reads=20, seed=42)
+
+# ── 7. INTERPRETAR Y COMPROBAR ──────────────────────────────────────────
+cfg = resultado.first.sample
+for t in tareas:
+    for p in personas:
+        if cfg[f&quot;{p}-{t}&quot;] == 1:
+            print(f&quot;{t:7s} → {p}&quot;)
+print(&quot;Horas totales:&quot;, objetivo.energy(cfg))
+print(&quot;Penalización:&quot;, restriccion.energy(cfg), &quot;(0 = cada tarea tiene una persona)&quot;)</code></pre></div></details>
+      <details><summary>Retos</summary><ol><li>Si Beñat tardase 9 h en VLAN… → <b>todo para Ana: 13 h.</b></li><li>Añade a Carla con 3 h en todo (y su línea en la restricción). → <b>DNS pasa a Carla: 8 h.</b></li></ol></details>
+      <a class="btn" href="#lab" data-preset="3">🧪 Abrir en el simulador</a>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="e4" data-title="Ejercicio 4 · Equilibrar VMs">
+  <span class="kicker">Ejercicio 4 · 4 variables · sin restricciones</span>
+  <h2>Equilibrar máquinas virtuales entre dos hosts</h2>
+  <div class="cols">
+    <div class="prose">
+      <p>4 VMs con <b>3, 5, 6 y 10 GB</b> de RAM (24 GB). ¿Cómo las repartimos entre los hosts A y B para que queden lo más igualados posible?</p>
+      <div class="tw"><table>
+        <tr><td>Variables</td><td>x_VM = 1 → host A · 0 → host B</td></tr>
+        <tr><td>RAM en A</td><td>3·x₁ + 5·x₂ + 6·x₃ + 10·x₄</td></tr>
+        <tr><td>Diferencia</td><td>RAM_A − RAM_B = 2·RAM_A − 24</td></tr>
+        <tr><td>H</td><td>(2·RAM_A − 24)² &nbsp;<small>(0 si es perfecto)</small></td></tr>
+      </table></div>
+      <div class="callout"><b>Truco:</b> elevar al cuadrado convierte "lo más cerca de 0" en "lo más pequeño posible", que es justo lo que busca el solver.</div>
+    </div>
+    <div class="stack">
+      <figure class="fig"><img src="img/ej6-particion.png" alt="Host A con 3 y 10 GB suma 13, host B con 5 y 6 GB suma 11" width="1180" height="590"></figure>
+      <div class="callout ok"><b>Resultado:</b> {3, 10} → 13 GB y {5, 6} → 11 GB. Diferencia 2, energía 4. No existe reparto de 12 / 12.</div>
+      <details class="code"><summary>Código completo · <code>ejercicio4_particion.py</code></summary><div class="codewrap"><pre class="py"><code>&quot;&quot;&quot;
+Ejercicio 4 · Equilibrar máquinas virtuales entre dos hosts    (4 variables)
+============================================================================
+Tenemos 4 máquinas virtuales con esta RAM: 3, 5, 6 y 10 GB (total 24 GB).
+Queremos repartirlas en dos hosts (A y B) con la RAM lo más igualada posible.
+Lo ideal sería 12 GB en cada uno.
+
+Este problema NO tiene restricciones: solo función objetivo.
+
+Ejecutar:  python ejercicio4_particion.py
+&quot;&quot;&quot;
+import dimod
+from dwave.samplers import SimulatedAnnealingSampler
+
+# ── 1. DATOS ────────────────────────────────────────────────────────────
+ram = {&quot;VM1&quot;: 3, &quot;VM2&quot;: 5, &quot;VM3&quot;: 6, &quot;VM4&quot;: 10}
+total = sum(ram.values())                      # 24
+
+# ── 2. VARIABLES BINARIAS: una por máquina ──────────────────────────────
+# x[&quot;VM1&quot;] = 1 → VM1 va al host A ;  0 → va al host B
+x = {vm: dimod.Binary(vm) for vm in ram}
+
+# ── 3. OBJETIVO ─────────────────────────────────────────────────────────
+# RAM del host A = suma de las VMs con x = 1
+ram_A = sum(ram[vm] * x[vm] for vm in ram)
+# Diferencia entre hosts = ram_A − ram_B = ram_A − (total − ram_A) = 2·ram_A − total
+# La elevamos al cuadrado: siempre ≥ 0 y vale 0 si el reparto es perfecto.
+H = (2 * ram_A - total) ** 2
+
+# ── 4. (sin restricciones) ──────────────────────────────────────────────
+# ── 5. H ya está construido ─────────────────────────────────────────────
+
+# ── 6. RESOLVER ─────────────────────────────────────────────────────────
+resultado = SimulatedAnnealingSampler().sample(H, num_reads=20, seed=42)
+
+# ── 7. INTERPRETAR ──────────────────────────────────────────────────────
+cfg = resultado.first.sample
+host_A = [vm for vm in ram if cfg[vm] == 1]
+host_B = [vm for vm in ram if cfg[vm] == 0]
+gb_A = sum(ram[vm] for vm in host_A)
+print(&quot;Host A:&quot;, host_A, &quot;→&quot;, gb_A, &quot;GB&quot;)
+print(&quot;Host B:&quot;, host_B, &quot;→&quot;, total - gb_A, &quot;GB&quot;)
+print(&quot;Diferencia:&quot;, abs(2 * gb_A - total), &quot;GB  | Energía:&quot;, resultado.first.energy)</code></pre></div></details>
+      <details><summary>Retos</summary><ol><li>RAM {4, 5, 6, 7, 8} GB. → <b>{7, 8} y {4, 5, 6}: 15 / 15, energía 0.</b></li><li>RAM {2, 4, 6, 8, 12} GB. → <b>{4, 12} y {2, 6, 8}: 16 / 16.</b></li></ol></details>
+      <a class="btn" href="#lab" data-preset="4">🧪 Abrir en el simulador</a>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="e5" data-title="Ejercicio 5 · Max-Cut">
+  <span class="kicker">Ejercicio 5 · 7 variables · sin restricciones</span>
+  <h2>Max-Cut: dividir una red en dos grupos</h2>
+  <div class="cols">
+    <div class="prose">
+      <p>7 equipos y 10 conexiones. Queremos que el <b>máximo de conexiones</b> quede entre grupos distintos.</p>
+      <div class="tw"><table>
+        <tr><td>Variables</td><td>x_i = 0 → grupo A · 1 → grupo B</td></tr>
+        <tr><td>Arista cortada</td><td>x_i + x_j − 2·x_i·x_j &nbsp;<small>(1 si son distintos)</small></td></tr>
+        <tr><td>H</td><td>−(suma de aristas cortadas)</td></tr>
+      </table></div>
+      <div class="tw" style="margin-top:10px"><table><tr><th class="c">x_i</th><th class="c">x_j</th><th class="c">x_i + x_j − 2·x_i·x_j</th></tr>
+        <tr><td class="c">0</td><td class="c">0</td><td class="c">0</td></tr><tr><td class="c">0</td><td class="c">1</td><td class="c"><b>1</b></td></tr><tr><td class="c">1</td><td class="c">0</td><td class="c"><b>1</b></td></tr><tr><td class="c">1</td><td class="c">1</td><td class="c">0</td></tr></table></div>
+    </div>
+    <div class="stack">
+      <figure class="fig"><img src="img/ej4-maxcut.png" alt="Grafo de 7 nodos: azul grupo A, naranja grupo B, aristas cortadas en rojo" width="1050" height="870" style="max-height:330px;width:auto"></figure>
+      <div class="callout ok"><b>Resultado:</b> <b>9 de 10</b> aristas cortadas, energía −9.</div>
+      <details class="code"><summary>Código completo · <code>ejercicio5_maxcut.py</code></summary><div class="codewrap"><pre class="py"><code>&quot;&quot;&quot;
+Ejercicio 5 · Max-Cut: dividir una red en dos grupos           (7 variables)
+============================================================================
+Una red de 7 equipos. Queremos separarlos en dos grupos (A y B) de forma
+que el MÁXIMO número de conexiones (aristas) quede entre grupos distintos.
+Este problema NO tiene restricciones: solo función objetivo.
+
+Ejecutar:  python ejercicio5_maxcut.py
+&quot;&quot;&quot;
+import dimod
+from dwave.samplers import SimulatedAnnealingSampler
+
+# ── 1. DATOS: las conexiones de la red ──────────────────────────────────
+aristas = [(0, 1), (0, 2), (1, 3), (1, 4), (2, 3),
+           (2, 5), (3, 6), (4, 5), (4, 6), (5, 6)]
+n = 7
+
+# ── 2. VARIABLES BINARIAS: una por nodo ─────────────────────────────────
+# x[i] = 0 → nodo i en el grupo A ;  x[i] = 1 → nodo i en el grupo B
+x = [dimod.Binary(i) for i in range(n)]
+
+# ── 3. OBJETIVO ─────────────────────────────────────────────────────────
+# Una arista (i, j) está &quot;cortada&quot; si sus nodos están en grupos distintos.
+#   x_i + x_j − 2·x_i·x_j  vale 1 si x_i ≠ x_j  y 0 si son iguales.
+# Queremos MAXIMIZAR las cortadas → minimizamos su negativo.
+H = 0
+for i, j in aristas:
+    cortada = x[i] + x[j] - 2 * x[i] * x[j]
+    H = H - cortada
+
+# ── 4-5. (sin restricciones: H ya está construido) ─────────────────────
+
+# ── 6. RESOLVER ─────────────────────────────────────────────────────────
+resultado = SimulatedAnnealingSampler().sample(H, num_reads=20, seed=42)
+
+# ── 7. INTERPRETAR ──────────────────────────────────────────────────────
+cfg = resultado.first.sample
+grupo_A = [i for i in range(n) if cfg[i] == 0]
+grupo_B = [i for i in range(n) if cfg[i] == 1]
+cortadas = [(i, j) for i, j in aristas if cfg[i] != cfg[j]]
+print(&quot;Grupo A:&quot;, grupo_A)
+print(&quot;Grupo B:&quot;, grupo_B)
+print(&quot;Aristas cortadas:&quot;, len(cortadas), &quot;de&quot;, len(aristas))
+print(&quot;Energía:&quot;, resultado.first.energy, &quot;(= −aristas cortadas)&quot;)</code></pre></div></details>
+      <details><summary>Retos</summary><ol><li>¿Por qué salen dos soluciones con la misma energía? → <b>Intercambiar A y B da el mismo corte.</b></li><li>Quita la arista (4, 5). → <b>Se cortan las 9.</b></li></ol></details>
+      <a class="btn" href="#lab" data-preset="5">🧪 Abrir en el simulador</a>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="e6" data-title="Ejercicio 6 · Max-Cut N nodos">
+  <span class="kicker">Ejercicio 6 · ampliación</span>
+  <h2>Max-Cut con N nodos: cuando el problema crece</h2>
+  <div class="cols">
+    <div class="prose">
+      <p>El mismo código del ejercicio 5, pero con una red aleatoria del tamaño que elijas. Pide N, resuelve, compara con la fuerza bruta (si N ≤ 16) y dibuja la red.</p>
+      <div class="codewrap"><pre class="sh"><code>pip install networkx matplotlib
+python ejercicio6_maxcut_n_nodos.py
+Número de nodos (3-60, Enter = 12): 20</code></pre></div>
+      <div class="cols3" style="gap:10px">
+        <div class="card tint"><b>2ⁿ</b><p>Con 30 nodos hay más de mil millones de combinaciones.</p></div>
+        <div class="card tint"><b>Tiempo</b><p>Crece suave: depende de nodos y aristas, no de 2ⁿ.</p></div>
+        <div class="card tint"><b>Intentos</b><p>¿Cuántos de los 100 llegan al mejor corte?</p></div>
+      </div>
+    </div>
+    <div class="stack">
+      <details class="code"><summary>Código completo · <code>ejercicio6_maxcut_n_nodos.py</code></summary><div class="codewrap"><pre class="py"><code>&quot;&quot;&quot;
+Ejercicio 6 (ampliación) · Max-Cut con N nodos                 (N variables)
+============================================================================
+El mismo problema del ejercicio 5, pero con una red aleatoria del tamaño
+que tú elijas. Sirve para ver qué pasa cuando el problema crece:
+    · el número de combinaciones posibles es 2^N (crece muchísimo)
+    · el modelo QUBO solo tiene N variables y una interacción por arista
+
+Necesita:  pip install networkx matplotlib
+Ejecutar:  python ejercicio6_maxcut_n_nodos.py
+&quot;&quot;&quot;
+import time
+import dimod
+import networkx as nx
+import matplotlib.pyplot as plt
+from dwave.samplers import SimulatedAnnealingSampler
+
+# ── 1. DATOS: pedir N y crear una red aleatoria ─────────────────────────
+texto = input(&quot;Número de nodos (3-60, Enter = 12): &quot;).strip()
+n = int(texto) if texto else 12
+G = nx.erdos_renyi_graph(n, 0.5, seed=1)   # cada conexión existe con prob. 0,5
+print(f&quot;Red: {n} nodos, {G.number_of_edges()} aristas&quot;)
+print(f&quot;Combinaciones posibles: 2^{n} = {2**n:,}&quot;)
+
+# ── 2. VARIABLES: una por nodo (0 → grupo A, 1 → grupo B) ───────────────
+x = [dimod.Binary(i) for i in range(n)]
+
+# ── 3. OBJETIVO: −(aristas cortadas), igual que en el ejercicio 5 ───────
+H = 0
+for i, j in G.edges():
+    H = H - (x[i] + x[j] - 2 * x[i] * x[j])
+
+# ── 6. RESOLVER (y medir el tiempo) ─────────────────────────────────────
+inicio = time.time()
+resultado = SimulatedAnnealingSampler().sample(H, num_reads=100, seed=42)
+segundos = time.time() - inicio
+
+# ── 7. INTERPRETAR ──────────────────────────────────────────────────────
+mejor = resultado.first
+cfg = mejor.sample
+corte = int(-mejor.energy)
+print(f&quot;\nMejor corte encontrado: {corte} de {G.number_of_edges()} aristas&quot;)
+print(f&quot;Tiempo: {segundos:.2f} s para 100 intentos (num_reads)&quot;)
+
+# ¿Cuántos de los 100 intentos llegaron a ese mismo corte?
+energias = resultado.record.energy
+veces = int(sum(resultado.record.num_occurrences[energias == mejor.energy]))
+print(f&quot;Intentos que llegaron al mejor corte: {veces} de 100&quot;)
+
+# Con pocos nodos podemos comprobar el óptimo por fuerza bruta
+if n &lt;= 16:
+    optimo = int(-dimod.ExactSolver().sample(H).first.energy)
+    print(f&quot;Óptimo real (fuerza bruta): {optimo}  →  &quot;,
+          &quot;¡encontrado!&quot; if optimo == corte else &quot;no alcanzado&quot;)
+
+# ── Dibujo: azul = grupo A, naranja = grupo B, rojo = arista cortada ────
+colores = [&quot;#4c5fd5&quot; if cfg[i] == 0 else &quot;#f08c00&quot; for i in G.nodes()]
+cortadas = [(i, j) for i, j in G.edges() if cfg[i] != cfg[j]]
+pos = nx.spring_layout(G, seed=7)
+nx.draw_networkx_edges(G, pos, edge_color=&quot;#cccccc&quot;)
+nx.draw_networkx_edges(G, pos, edgelist=cortadas, edge_color=&quot;#e03131&quot;)
+nx.draw_networkx_nodes(G, pos, node_color=colores)
+nx.draw_networkx_labels(G, pos, font_color=&quot;white&quot;)
+plt.title(f&quot;Max-Cut {n} nodos: {corte}/{G.number_of_edges()} aristas cortadas&quot;)
+plt.axis(&quot;off&quot;)
+plt.show()</code></pre></div></details>
+      <details open><summary>Retos</summary><ol>
+        <li>Prueba 10, 16, 30 y 60 nodos. Anota tiempo, corte e intentos que aciertan.</li>
+        <li>Cambia <code>num_reads=100</code> por <code>10</code>. ¿Se sigue encontrando el mejor corte con 30 nodos?</li>
+        <li>Cambia la probabilidad 0,5 por 0,2. ¿Qué porcentaje de aristas se corta ahora?</li></ol></details>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="desc" data-title="Descargas y rúbrica">
+  <span class="kicker">Material</span>
+  <h2>Descargas y evaluación</h2>
+  <div class="cols">
+    <div class="prose">
+      <div class="tw"><table>
+        <tr><th>Fichero</th><th>Contenido</th></tr>
+        <tr><td><a href="web/prueba_entorno.txt"><code>prueba_entorno.py</code></a></td><td>Comprobación del entorno (Práctica 0)</td></tr>
+        <tr><td><a href="web/ejercicio1_beneficio.txt">1</a> · <a href="web/ejercicio2_servidores.txt">2</a> · <a href="web/ejercicio3_tareas.txt">3</a> · <a href="web/ejercicio4_particion.txt">4</a> · <a href="web/ejercicio5_maxcut.txt">5</a></td><td>Ejercicios guiados, código completo y comentado</td></tr>
+        <tr><td><a href="web/ejercicio6_maxcut_n_nodos.txt"><code>ejercicio6_maxcut_n_nodos.py</code></a></td><td>Ampliación: Max-Cut de N nodos</td></tr>
+        <tr><td><code>extra-profesorado/</code></td><td>Solo para el profesorado: ejercicios avanzados (mochila, TSP), script Max-Cut original y versión Fujitsu DADK</td></tr>
+      </table></div>
+      <p style="font-size:.9em;color:var(--muted)">Los ficheros están en la carpeta <code>descargas/</code> del paquete de apuntes (los enlaces los abren como texto). El código completo de cada ejercicio también está en su diapositiva.</p>
+      <h3>Plantilla de entrega (por ejercicio)</h3>
+      <ol style="padding-left:1.2em;margin:0"><li><b>Problema</b> en una frase.</li><li><b>Variables</b>: qué significa cada bit.</li><li><b>Objetivo y penalizaciones</b>: fórmula y P elegido.</li><li><b>Código y salida</b> (captura).</li><li><b>Comprobación</b>: penalización = 0 y lectura en lenguaje natural.</li><li><b>Retos</b> razonados.</li></ol>
+    </div>
+    <div class="tw"><table>
+      <tr><th>Criterio</th><th class="c">Peso</th></tr>
+      <tr><td>Entorno instalado y funcionando (Práctica 0)</td><td class="c">20 %</td></tr>
+      <tr><td>Formulación correcta (variables, objetivo, penalizaciones)</td><td class="c">35 %</td></tr>
+      <tr><td>El código ejecuta y la solución es factible</td><td class="c">25 %</td></tr>
+      <tr><td>Retos e interpretación del resultado</td><td class="c">20 %</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<section class="slide" id="fuentes" data-title="Fuentes y créditos">
+  <span class="kicker">Créditos</span>
+  <h2>Fuentes y créditos</h2>
+  <div class="cols">
+    <ul class="prose">
+      <li>IBM — <a href="https://www.ibm.com/es-es/think/topics/quantum-computing">¿Qué es la computación cuántica?</a></li>
+      <li>D-Wave — <a href="https://docs.dwavequantum.com/en/latest/quantum_research/quantum_annealing_intro.html">Introducción al Quantum Annealing</a></li>
+      <li>D-Wave — <a href="https://www.businesswire.com/news/home/20250520948155/en/">Advantage2 disponible (mayo 2025)</a></li>
+      <li>Fujitsu — <a href="https://global.fujitsu/en-us/local/technology/research/areas/digital-annealer">Digital Annealer</a></li>
+      <li>D-Wave — <a href="https://docs.dwavequantum.com/en/latest/concepts/symbolic_math.html">dimod: matemática simbólica</a> · <a href="https://github.com/dwavesystems/dwave-samplers">dwave-samplers</a></li>
+      <li>Patrick, Alan H. <i>Quantum for Everyone</i> (2025)</li>
+      <li>Imágenes: D-Wave, Fujitsu, Wikipedia, Quantum Fracture y elaboración propia</li>
+    </ul>
+    <div>
+      <p>Proyecto <b>ANNEALING: Computación Cuántica para problemas de Optimización</b>. Viceconsejería de Formación Profesional de Euskadi, curso 2025-26. Autores: Jaime Corrales y Juan Carlos San Román.</p>
+      <div class="credits"><div class="main"><img src="img/logo-sanluis.png" alt="Centro San Luis" width="500" height="110"></div>
+      <div class="collab"><span>Con la colaboración de</span><img src="img/logo-txurdinaga.png" alt="CIFP Txurdinaga LHII" width="191" height="66"><img src="img/logo-tknika.png" alt="Tknika" width="400" height="89"></div></div>
+    </div>
+  </div>
+  <div class="ia-decl" style="margin:16px 0 0;max-width:none"><img src="img/ia-verde.png" alt="Semáforo de uso de IA: verde, permitido" width="149" height="200"><div><b>Declaración de uso de IA</b> · Guía de uso de la IA en el aula, Centro San Luis (nivel verde). Este material parte de los apuntes propios del profesorado; se ha utilizado IA para la mejora de redacción, el formateo, los gráficos explicativos y los simuladores, con revisión y validación del profesorado.</div></div>
+</section>
+
+<footer class="footer"><span>Quantum Annealing y modelo QUBO · Cloud, IoT and Quantum Computing · CFGS ASIR</span><span>Centro San Luis · curso 2025-26 · v2 (nov. 2026)</span></footer>
+</main>
+</div>
+
+<div class="pres-ui" role="toolbar" aria-label="Controles de presentación">
+  <button class="btn small" id="pPrev" type="button" aria-label="Anterior">←</button>
+  <button class="btn small" id="pNext" type="button" aria-label="Siguiente">→</button>
+  <span class="count" id="pCount"></span>
+  <span class="prog"><i id="pProg"></i></span>
+  <button class="btn small" id="pFull" type="button">⛶ Pantalla completa</button>
+  <button class="btn small" id="pExit" type="button">Salir (Esc)</button>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const fmt=(v,d=2)=>Number(v).toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d});
+
+/* ── tema ── */
+$('#themeBtn').addEventListener('click',()=>{
+  const r=document.documentElement, dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
+  r.dataset.theme=dark?'light':'dark'; redrawAll();
+});
+
+/* ── índice lateral ── */
+const slides=$$('main > section');
+(function buildToc(){
+  let html='<ol>', open=false, n=0;
+  slides.forEach(s=>{
+    const t=s.dataset.title||''; if(!s.id) return;
+    if(s.dataset.unit){ if(open) html+='</ol></li>'; n=s.dataset.unit;
+      html+=`<li class="u"><a href="#${s.id}"><span class="n">${n}</span>${t.replace(/^Unidad \d · /,'')}</a><ol>`; open=true; }
+    else if(open){ html+=`<li><a href="#${s.id}">${t}</a></li>`; }
+    else html+=`<li class="u"><a href="#${s.id}"><span class="n">·</span>${t}</a></li>`;
+  });
+  if(open) html+='</ol></li>'; html+='</ol>'; $('#toc').innerHTML=html;
+})();
+const tocLinks=$$('#toc a');
+if('IntersectionObserver' in window){
+  const io=new IntersectionObserver(es=>{es.forEach(e=>{ if(e.isIntersecting){ tocLinks.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+e.target.id)); }});},{rootMargin:'-40% 0px -55% 0px'});
+  slides.forEach(s=>io.observe(s));
+}
+
+/* ── resaltado de código ── */
+$$('pre.py code').forEach(c=>{
+  const KW=/\b(from|import|as|def|return|for|in|if|else|elif|try|except|print|True|False|None|and|or|not|lambda|while|class)\b/g;
+  let h=c.textContent.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  h=h.split('\n').map(l=>{ const i=l.indexOf('#'); let code=i>=0?l.slice(0,i):l, com=i>=0?l.slice(i):'';
+    code=code.replace(/("[^"]*"|'[^']*')/g,'\u0001$1\u0002').replace(KW,'<span class="k">$1</span>').replace(/\b(\d+(?:\.\d+)?)\b/g,'<span class="n">$1</span>')
+      .replace(/\u0001([\s\S]*?)\u0002/g,(m,s)=>'<span class="s">'+s.replace(/<[^>]+>/g,'')+'</span>');
+    return code+(com?'<span class="c">'+com+'</span>':''); }).join('\n');
+  c.innerHTML=h;
+});
+$$('pre.sh code').forEach(c=>{ c.innerHTML=c.innerHTML.split('\n').map(l=>/^\s*#/.test(l)?'<span class="c">'+l+'</span>':l).join('\n'); });
+$$('.codewrap').forEach(w=>{ const b=document.createElement('button'); b.type='button'; b.className='btn small copy'; b.textContent='Copiar';
+  b.addEventListener('click',async()=>{ try{ await navigator.clipboard.writeText(w.querySelector('pre').innerText); b.textContent='Copiado ✓'; }catch(e){ b.textContent='Selecciona y copia'; } setTimeout(()=>b.textContent='Copiar',1600); });
+  w.prepend(b); });
+$$('[data-tabgroup]').forEach(g=>{ const btns=[...g.querySelectorAll('button')]; const panes=[...g.parentElement.querySelectorAll('[data-pane]')];
+  btns.forEach(b=>b.addEventListener('click',()=>{ btns.forEach(x=>x.setAttribute('aria-selected',x===b)); panes.forEach(p=>p.hidden=p.dataset.pane!==b.dataset.tab); })); });
+
+/* ── modo presentación ── */
+let cur=0, present=false;
+const pres=[...slides];
+function show(i){ cur=Math.max(0,Math.min(pres.length-1,i)); pres.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  $('#pCount').textContent=(cur+1)+' / '+pres.length; $('#pProg').style.width=((cur+1)/pres.length*100)+'%';
+  pres[cur].scrollTop=0; if(pres[cur].id) history.replaceState(null,'','#'+pres[cur].id); setTimeout(redrawAll,30); }
+function enter(i){ present=true; document.body.classList.add('present'); show(i==null?currentIndex():i); }
+function exit(){ present=false; document.body.classList.remove('present'); pres.forEach(s=>s.classList.remove('active'));
+  if(document.fullscreenElement) document.exitFullscreen().catch(()=>{}); const s=pres[cur]; requestAnimationFrame(()=>{ s.scrollIntoView({block:'start'}); redrawAll(); }); }
+function currentIndex(){ let best=0,bd=1e9; pres.forEach((s,k)=>{ const d=Math.abs(s.getBoundingClientRect().top-70); if(d<bd){bd=d;best=k;} }); return best; }
+$('#presBtn').addEventListener('click',()=>enter());
+$$('[data-present]').forEach(b=>b.addEventListener('click',()=>enter(0)));
+$('#pPrev').addEventListener('click',()=>show(cur-1)); $('#pNext').addEventListener('click',()=>show(cur+1)); $('#pExit').addEventListener('click',exit);
+function full(){ try{ if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{}); else document.exitFullscreen().catch(()=>{}); }catch(e){} }
+$('#pFull').addEventListener('click',full);
+document.addEventListener('keydown',e=>{
+  const tag=(e.target.tagName||'').toLowerCase(); if(['input','select','textarea'].includes(tag)) return;
+  if(!present && (e.key==='p'||e.key==='P')){ enter(); e.preventDefault(); return; }
+  if(!present) return;
+  if(['ArrowRight','PageDown',' '].includes(e.key)){ show(cur+1); e.preventDefault(); }
+  else if(['ArrowLeft','PageUp'].includes(e.key)){ show(cur-1); e.preventDefault(); }
+  else if(e.key==='Home'){ show(0); } else if(e.key==='End'){ show(pres.length-1); }
+  else if(e.key==='Escape'){ exit(); } else if(e.key==='f'||e.key==='F'){ full(); }
+});
+let tx=null; document.addEventListener('touchstart',e=>{tx=e.touches[0].clientX},{passive:true});
+document.addEventListener('touchend',e=>{ if(!present||tx==null) return; const dx=e.changedTouches[0].clientX-tx; if(Math.abs(dx)>70) show(cur+(dx<0?1:-1)); tx=null; },{passive:true});
+document.addEventListener('click',e=>{ const a=e.target.closest('a[href^="#"]'); if(!a) return; const id=a.getAttribute('href').slice(1);
+  if(a.dataset.preset){ setPreset(+a.dataset.preset); }
+  if(present){ const k=pres.findIndex(s=>s.id===id); if(k>=0){ e.preventDefault(); show(k); } } });
+
+/* ── portada: qubits flotando ── */
+(function hero(){ const c=$('#heroCanvas'); if(!c) return; const g=c.getContext('2d'); let t=0;
+  function draw(){ g.clearRect(0,0,520,520); const cx=300,cy=230;
+    for(let r=1;r<=4;r++){ g.beginPath(); g.ellipse(cx,cy,60*r,22*r,-.35,0,7); g.strokeStyle=`rgba(229,141,82,${.5-r*.09})`; g.lineWidth=1.5; g.stroke(); }
+    g.beginPath(); g.arc(cx,cy,150,0,7); g.strokeStyle='rgba(180,190,255,.35)'; g.lineWidth=1.2; g.stroke();
+    for(let k=0;k<7;k++){ const a=t*0.6+k*0.9, r=55+k*14, x=cx+Math.cos(a)*r*1.1, y=cy+Math.sin(a)*r*.42;
+      g.beginPath(); g.arc(x,y,5+k%3*2,0,7); g.fillStyle=k%2?'rgba(229,141,82,.95)':'rgba(160,172,255,.95)'; g.fill(); }
+    const th=Math.sin(t*.8)*1.1+0.4; g.beginPath(); g.moveTo(cx,cy); g.lineTo(cx+Math.sin(th)*140,cy-Math.cos(th)*140); g.strokeStyle='#f3c39c'; g.lineWidth=3; g.stroke();
+    g.beginPath(); g.arc(cx+Math.sin(th)*140,cy-Math.cos(th)*140,7,0,7); g.fillStyle='#f3c39c'; g.fill();
+    t+=0.012; if(!RM) requestAnimationFrame(draw); }
+  draw(); })();
+
+/* ── widget qubit ── */
+const qT=$('#qTheta'); let qCounts=[0,0];
+function qDraw(){ const th=+qT.value*Math.PI/180, a=Math.cos(th/2), b=Math.sin(th/2), p0=a*a, p1=b*b;
+  $('#qThetaV').textContent=qT.value+'°'; $('#qEq').textContent=`|ψ⟩ = ${fmt(a)}|0⟩ + ${fmt(b)}|1⟩`;
+  $('#qB0').style.width=(p0*100)+'%'; $('#qB1').style.width=(p1*100)+'%'; $('#qP0').textContent=Math.round(p0*100)+' %'; $('#qP1').textContent=Math.round(p1*100)+' %';
+  const ink=css('--ink'), mu=css('--muted'), ac=css('--accent');
+  const x=Math.sin(th)*48, y=-Math.cos(th)*48;
+  $('#qSvg').innerHTML=`<circle r="48" fill="none" stroke="${mu}" stroke-width="1.2"/><ellipse rx="48" ry="12" fill="none" stroke="${mu}" stroke-dasharray="3 3" stroke-width="1"/>
+   <text y="-52" text-anchor="middle" font-size="10" fill="${ink}">|0⟩</text><text y="60" text-anchor="middle" font-size="10" fill="${ink}">|1⟩</text>
+   <line x1="0" y1="0" x2="${x}" y2="${y}" stroke="${ac}" stroke-width="3" stroke-linecap="round"/><circle cx="${x}" cy="${y}" r="4.5" fill="${ac}"/>`;
+  return [p0,p1]; }
+function qHist(){ const tot=qCounts[0]+qCounts[1]; if(!tot){ $('#qHist').innerHTML=''; return; }
+  $('#qHist').innerHTML=[0,1].map(k=>`<div class="bar"><span>“${k}”</span><span class="t"><i style="width:${qCounts[k]/tot*100}%;background:${k?'var(--accent)':'var(--indigo)'}"></i></span><span class="stat">${qCounts[k]}</span></div>`).join('')+`<small style="color:var(--muted)">${tot} mediciones</small>`; }
+qT.addEventListener('input',()=>{ qDraw(); qCounts=[0,0]; qHist(); $('#qOut').textContent=''; });
+$('#qM1').addEventListener('click',()=>{ const [p0]=qDraw(); const r=Math.random()<p0?0:1; qCounts[r]++; $('#qOut').textContent='→ '+r; qHist(); });
+$('#qM100').addEventListener('click',()=>{ const [p0]=qDraw(); for(let i=0;i<100;i++) qCounts[Math.random()<p0?0:1]++; $('#qOut').textContent=''; qHist(); });
+$('#qReset').addEventListener('click',()=>{ qCounts=[0,0]; qHist(); $('#qOut').textContent=''; });
+
+/* ── widget 2^n ── */
+let nMode='c', nTimer=null, nLit=0;
+function nDraw(){ const n=+$('#nQ').value, N=2**n; $('#nQv').textContent=n+' → '+N.toLocaleString('es-ES')+' combinaciones';
+  const cols=Math.min(N, n<=3?8:n<=6?16:32); const g=$('#nGrid'); g.style.gridTemplateColumns=`repeat(${cols},1fr)`;
+  let h=''; for(let i=0;i<N;i++){ const lab=n<=6?i.toString(2).padStart(n,'0'):''; h+=`<div data-i="${i}">${lab}</div>`; } g.innerHTML=h;
+  [...g.children].forEach(d=>{ if(n>6) d.style.aspectRatio='1'; });
+  $('#nTxt').textContent=nMode==='c'?`Bits clásicos: el sistema está en UNA sola de las ${N.toLocaleString('es-ES')} combinaciones cada vez.`:`Qubits: superposición de las ${N.toLocaleString('es-ES')} combinaciones a la vez (la intensidad indica la amplitud).`;
+  nPaint(); }
+function nPaint(){ const cells=[...$('#nGrid').children];
+  if(nMode==='c'){ cells.forEach((d,i)=>{ d.className=i===nLit%cells.length?'on':''; d.style.opacity=1; }); }
+  else cells.forEach((d,i)=>{ d.className='q'; d.style.opacity=(0.35+0.65*Math.abs(Math.sin(i*1.7+1))).toFixed(2); }); }
+function nTick(){ clearInterval(nTimer); if(nMode==='c' && !RM) nTimer=setInterval(()=>{ nLit=Math.floor(Math.random()*1024); nPaint(); },700); }
+$('#nQ').addEventListener('input',nDraw);
+$('#nClas').addEventListener('click',()=>{ nMode='c'; $('#nClas').setAttribute('aria-selected',true); $('#nQuan').setAttribute('aria-selected',false); nDraw(); nTick(); });
+$('#nQuan').addEventListener('click',()=>{ nMode='q'; $('#nQuan').setAttribute('aria-selected',true); $('#nClas').setAttribute('aria-selected',false); nDraw(); nTick(); });
+
+/* ── widget ondas ── */
+function waveDraw(){ const c=$('#waveC'), g=c.getContext('2d'), W=c.width, Hh=c.height, ph=+$('#phase').value*Math.PI/180;
+  $('#phaseV').textContent=$('#phase').value+'°'; g.clearRect(0,0,W,Hh);
+  const rows=[{y:50,f:x=>Math.sin(x),col:css('--indigo'),lab:'Onda A'},{y:140,f:x=>Math.sin(x+ph),col:css('--accent'),lab:'Onda B'},{y:235,f:x=>Math.sin(x)+Math.sin(x+ph),col:css('--ok'),lab:'A + B'}];
+  g.font='600 14px "Source Sans 3",sans-serif';
+  rows.forEach(r=>{ g.strokeStyle=css('--line'); g.lineWidth=1; g.beginPath(); g.moveTo(70,r.y); g.lineTo(W-10,r.y); g.stroke();
+    g.fillStyle=css('--muted'); g.fillText(r.lab,8,r.y+5); g.strokeStyle=r.col; g.lineWidth=3; g.beginPath();
+    for(let px=70;px<W-10;px++){ const x=(px-70)/48; const y=r.y-r.f(x)*(r.lab==='A + B'?28:30); px===70?g.moveTo(px,y):g.lineTo(px,y); } g.stroke(); });
+  const amp=Math.abs(2*Math.cos(ph/2)); const t=$('#phaseTxt');
+  if(amp>1.5){ t.textContent='Interferencia constructiva: amplitud ×'+fmt(amp,1)+' → resultado más probable'; t.style.color=css('--ok'); }
+  else if(amp<0.5){ t.textContent='Interferencia destructiva: se cancelan (amplitud '+fmt(amp,1)+') → resultado casi imposible'; t.style.color=css('--bad'); }
+  else { t.textContent='Interferencia parcial: amplitud '+fmt(amp,1); t.style.color=css('--muted'); } }
+$('#phase').addEventListener('input',waveDraw);
+
+/* ── widget annealing 1D ── */
+const AN={N:240};
+AN.f=x=>{ const gs=(c,w,a)=>a*Math.exp(-((x-c)**2)/(2*w*w)); return 0.9+0.04*(x-5)**2+gs(1.2,0.7,1.0)-gs(2.9,0.55,1.5)+gs(5.0,0.5,1.25)-gs(7.2,0.5,2.6)+gs(8.7,0.4,0.8)-gs(9.6,0.3,0.6); };
+AN.E=[...Array(AN.N)].map((_,i)=>AN.f(i/(AN.N-1)*10));
+AN.gmin=AN.E.indexOf(Math.min(...AN.E));
+AN.lmin=(()=>{let b=0,bv=1e9; for(let i=Math.round(AN.N*0.2);i<Math.round(AN.N*0.4);i++) if(AN.E[i]<bv){bv=AN.E[i];b=i;} return b;})();
+AN.pos=AN.lmin; AN.trail=[]; AN.finals=[]; AN.anim=null;
+function anParams(){ const T0=(+$('#annT').value/100)*2.5+0.01; $('#annTv').textContent=fmt(T0,2); $('#annItv').textContent=$('#annIt').value; return {T0,it:+$('#annIt').value,tun:$('#annTun').checked,loc:$('#annLoc').checked}; }
+function anStep(s,T,tun){ const step=tun?Math.round((Math.random()*2-1)*AN.N*0.35):(Math.random()<.5?-1:1)*(1+Math.floor(Math.random()*10));
+  const j=Math.max(0,Math.min(AN.N-1,s+step)); const dE=AN.E[j]-AN.E[s]; if(dE<=0||Math.random()<Math.exp(-dE/T)) return j; return s; }
+function anRunFast(p){ let s=p.loc?AN.lmin:Math.floor(Math.random()*AN.N), best=s; const T1=0.02, a=(T1/p.T0)**(1/p.it); let T=p.T0;
+  for(let k=0;k<p.it;k++){ s=anStep(s,T,p.tun); if(AN.E[s]<AN.E[best]) best=s; T*=a; } return best; }
+function anDraw(T){ const c=$('#annC'), g=c.getContext('2d'), W=c.width, Hh=c.height; g.clearRect(0,0,W,Hh);
+  const mn=Math.min(...AN.E), mx=Math.max(...AN.E), X=i=>20+i/(AN.N-1)*(W-40), Y=e=>Hh-30-(e-mn)/(mx-mn)*(Hh-90);
+  g.beginPath(); g.moveTo(X(0),Hh); AN.E.forEach((e,i)=>g.lineTo(X(i),Y(e))); g.lineTo(X(AN.N-1),Hh); g.closePath(); g.fillStyle=css('--indigo-soft'); g.fill();
+  g.beginPath(); AN.E.forEach((e,i)=>i?g.lineTo(X(i),Y(e)):g.moveTo(X(i),Y(e))); g.strokeStyle=css('--ink'); g.lineWidth=3; g.stroke();
+  g.font='600 15px "Source Sans 3",sans-serif'; g.textAlign='center';
+  g.fillStyle=css('--ok'); g.fillText('mínimo global',X(AN.gmin),Hh-8); g.fillStyle=css('--muted'); g.fillText('mínimo local',X(AN.lmin),Hh-8);
+  const cnt={}; AN.finals.forEach(f=>{ const k=Math.abs(f-AN.gmin)<8?'g':Math.abs(f-AN.lmin)<8?'l':'o'; cnt[k]=(cnt[k]||0)+1; });
+  AN.finals.forEach((f,k)=>{ g.beginPath(); g.arc(X(f),Y(AN.E[f])-10-(k%10)*9,4,0,7); g.fillStyle=Math.abs(f-AN.gmin)<8?css('--ok'):css('--accent'); g.globalAlpha=.8; g.fill(); g.globalAlpha=1; });
+  if(AN.trail.length>1){ g.beginPath(); AN.trail.forEach((s,k)=>k?g.lineTo(X(s),Y(AN.E[s])-12):g.moveTo(X(s),Y(AN.E[s])-12)); g.strokeStyle=css('--accent'); g.globalAlpha=.25; g.lineWidth=2; g.stroke(); g.globalAlpha=1; }
+  g.beginPath(); g.arc(X(AN.pos),Y(AN.E[AN.pos])-12,11,0,7); g.fillStyle=css('--accent'); g.fill();
+  if(T!=null){ g.textAlign='left'; g.fillStyle=css('--bad'); g.fillText('T = '+fmt(T,3),24,26); g.fillStyle=css('--surface-2'); g.fillRect(110,15,200,12); g.fillStyle=css('--bad'); g.fillRect(110,15,200*Math.min(1,T/2.5),12); }
+  if(AN.finals.length){ g.textAlign='right'; g.fillStyle=css('--ink'); g.fillText(`${AN.finals.length} runs → global: ${cnt.g||0} · local: ${cnt.l||0} · otros: ${cnt.o||0}`,W-20,26); }
+}
+$('#annRun').addEventListener('click',()=>{ cancelAnimationFrame(AN.anim); const p=anParams(); AN.finals=[]; AN.trail=[]; let s=p.loc?AN.lmin:Math.floor(Math.random()*AN.N), best=s, T=p.T0, k=0; const a=(0.02/p.T0)**(1/p.it);
+  const per=Math.max(1,Math.round(p.it/240)); $('#annMsg').textContent='Buscando…'; $('#annMsg').style.color=css('--muted');
+  (function fr(){ for(let q=0;q<per&&k<p.it;q++,k++){ s=anStep(s,T,p.tun); if(AN.E[s]<AN.E[best]) best=s; T*=a; } AN.pos=s; AN.trail.push(s); if(AN.trail.length>120) AN.trail.shift(); anDraw(T);
+    if(k<p.it && !RM) AN.anim=requestAnimationFrame(fr); else { while(k<p.it){ s=anStep(s,T,p.tun); if(AN.E[s]<AN.E[best]) best=s; T*=a; k++; } AN.pos=best; AN.trail=[]; anDraw(T);
+      const ok=Math.abs(best-AN.gmin)<8; $('#annMsg').textContent=ok?'✓ Llegó al mínimo global':'✗ Se quedó en un mínimo local'; $('#annMsg').style.color=ok?css('--ok'):css('--bad'); } })(); });
+$('#annRun20').addEventListener('click',()=>{ cancelAnimationFrame(AN.anim); const p=anParams(); AN.finals=[]; AN.trail=[]; for(let r=0;r<20;r++) AN.finals.push(anRunFast(p));
+  AN.pos=AN.finals.reduce((b,f)=>AN.E[f]<AN.E[b]?f:b,AN.finals[0]); const g=AN.finals.filter(f=>Math.abs(f-AN.gmin)<8).length;
+  $('#annMsg').textContent=`${g} de 20 runs llegaron al mínimo global`; $('#annMsg').style.color=g>=10?css('--ok'):g>0?css('--warn'):css('--bad'); anDraw(null); });
+['annT','annIt','annTun','annLoc'].forEach(id=>$('#'+id).addEventListener('input',()=>{ anParams(); }));
+
+/* ══ mini BinPol en JS ══ */
+class Poly{ constructor(m){ this.t=new Map(m||[]); }
+  static term(c,i){ return new Poly([[String(i),c]]); } static k(c){ return new Poly([['',c]]); }
+  static of(x){ return x instanceof Poly?x:Poly.k(x); }
+  add(o){ o=Poly.of(o); const r=new Poly(this.t); o.t.forEach((c,k)=>{ const v=(r.t.get(k)||0)+c; v===0?r.t.delete(k):r.t.set(k,v); }); return r; }
+  sub(o){ return this.add(Poly.of(o).mul(-1)); }
+  mul(o){ o=Poly.of(o); const r=new Poly(); this.t.forEach((c1,k1)=>o.t.forEach((c2,k2)=>{ const s=[...new Set([...(k1?k1.split(','):[]),...(k2?k2.split(','):[])].map(Number))].sort((a,b)=>a-b).join(','); const v=(r.t.get(s)||0)+c1*c2; v===0?r.t.delete(s):r.t.set(s,v); })); return r; }
+  sq(){ return this.mul(this); }
+  static sum(arr){ return arr.reduce((a,b)=>a.add(b),new Poly()); }
+  get N(){ let m=-1; this.t.forEach((c,k)=>{ if(k) k.split(',').forEach(i=>m=Math.max(m,+i)); }); return m+1; }
+  val(x){ let s=0; this.t.forEach((c,k)=>{ if(!k){s+=c;return;} if(k.split(',').every(i=>x[+i])) s+=c; }); return s; }
+  str(){ const e=[...this.t.entries()].sort((a,b)=>{ const A=a[0]?a[0].split(',').map(Number):[], B=b[0]?b[0].split(',').map(Number):[]; for(let i=0;i<Math.max(A.length,B.length);i++){ if(A[i]===undefined) return -1; if(B[i]===undefined) return 1; if(A[i]!==B[i]) return A[i]-B[i]; } return 0; });
+    return e.map(([k,c],i)=>{ const v=Math.abs(c), vars=k?k.split(',').map(j=>'x'+j).join('·'):''; const body=(v!==1||!k)?(fmtN(v)+(vars?' '+vars:'')):vars; return (i===0?(c<0?'- ':''):(c<0?'- ':'+ '))+body; }).join(' ')||'0'; }
+}
+const fmtN=v=>Number.isInteger(v)?String(v):String(+v.toFixed(4));
+const T_=(i)=>Poly.term(1,i);
+const nums=s=>String(s).split(/[,;\s]+/).filter(Boolean).map(Number);
+const rows=s=>String(s).split(';').map(r=>nums(r));
+
+/* ── presets ── */
+const PRESETS={
+ 1:{name:'1 · Selección del mayor beneficio',params:[['ben','Beneficios (A, B, C…)','3, 2'],['P','Penalización P','4']],
+   build(p){ const b=nums(p.ben), P=+p.P, x=b.map((_,i)=>T_(i)); const obj=Poly.sum(x.map((xi,i)=>xi.mul(-b[i]))); const pen=Poly.sum(x).sub(1).sq().mul(P);
+     return {obj,pen,dec(c){ const el=b.map((_,i)=>c[i]?String.fromCharCode(65+i):null).filter(Boolean); return 'Elegido: '+(el.join(' + ')||'ninguno')+' · beneficio '+b.reduce((s,v,i)=>s+v*c[i],0); }}; }},
+ 2:{name:'2 · Servidores encendidos',params:[['c','Consumos (W)','120, 90, 150, 80'],['K','Cuántos encendidos (K)','2'],['P','Penalización P','500']],
+   build(p){ const c=nums(p.c), K=+p.K, P=+p.P, x=c.map((_,i)=>T_(i)); const obj=Poly.sum(x.map((xi,i)=>xi.mul(c[i]))); const pen=Poly.sum(x).sub(K).sq().mul(P);
+     return {obj,pen,info:`${c.length} servidores`,dec(cf){ const on=c.map((_,i)=>cf[i]?'S'+(i+1):null).filter(Boolean); return 'Encendidos: '+(on.join(' + ')||'ninguno')+' · '+obj.val(cf)+' W'; }}; }},
+ 3:{name:'3 · Reparto de tareas',params:[['c','Costes (una fila por persona, ;)','4,6,3; 5,2,7'],['P','Penalización P','20']],
+   build(p){ const C=rows(p.c), np=C.length, nt=C[0].length, P=+p.P, X=(q,t)=>T_(q*nt+t); const pn=['Ana','Beñat','Carla','Dani'], tn=nt===3?['DNS','VLAN','Backup']:C[0].map((_,t)=>'T'+t);
+     let obj=new Poly(); for(let q=0;q<np;q++) for(let t=0;t<nt;t++) obj=obj.add(X(q,t).mul(C[q][t]));
+     let pen=new Poly(); for(let t=0;t<nt;t++){ let s=new Poly(); for(let q=0;q<np;q++) s=s.add(X(q,t)); pen=pen.add(s.sub(1).sq()); } pen=pen.mul(P);
+     return {obj,pen,info:`${np} personas × ${nt} tareas = ${np*nt} bits`,dec(cf){ return tn.map((tt,t)=>{ const w=[]; for(let q=0;q<np;q++) if(cf[q*nt+t]) w.push(pn[q]||'P'+q); return tt+'→'+(w.join('+')||'nadie'); }).join(' · ')+' · coste '+obj.val(cf); }}; }},
+ 4:{name:'4 · Equilibrar VMs (partición)',params:[['n','RAM de las VMs (GB)','3, 5, 6, 10']],
+   build(p){ const v=nums(p.n), S=v.reduce((a,b)=>a+b,0); const SA=Poly.sum(v.map((k,i)=>T_(i).mul(k))); const obj=SA.mul(2).sub(S).sq();
+     return {obj,pen:new Poly(),info:`suma total ${S}`,dec(c){ const A=v.filter((_,i)=>c[i]), B=v.filter((_,i)=>!c[i]); const a=A.reduce((x,y)=>x+y,0); return `Host A {${A}} = ${a} GB · Host B {${B}} = ${S-a} GB · diferencia ${Math.abs(2*a-S)}`; }}; }},
+ 5:{name:'5 · Max-Cut',params:[['e','Aristas','0-1, 0-2, 1-3, 1-4, 2-3, 2-5, 3-6, 4-5, 4-6, 5-6']],
+   build(p){ const E=String(p.e).split(/[,;\s]+/).filter(Boolean).map(s=>s.split('-').map(Number)); const obj=Poly.sum(E.map(([i,j])=>T_(i).add(T_(j)).sub(T_(i).mul(T_(j)).mul(2)))).mul(-1);
+     return {obj,pen:new Poly(),info:`${E.length} aristas · sin penalizaciones`,dec(c){ const N=Math.max(...E.flat())+1, A=[],B=[]; for(let i=0;i<N;i++) (c[i]?B:A).push(i); const cut=E.filter(([i,j])=>c[i]!==c[j]).length; return `A {${A}} · B {${B}} · corte ${cut}/${E.length}`; }}; }}
+};
+const sel=$('#labPreset'); Object.entries(PRESETS).forEach(([k,v])=>{ const o=document.createElement('option'); o.value=k; o.textContent=v.name; sel.appendChild(o); });
+let LAB=null;
+function setPreset(k){ sel.value=k; const pr=PRESETS[k]; $('#labParams').innerHTML=pr.params.map(([id,lab,def])=>`<label for="lp_${id}">${lab}<input id="lp_${id}" data-k="${id}" value="${def}"></label>`).join('');
+  $$('#labParams input').forEach(i=>i.addEventListener('change',labBuild)); const it={1:100,2:300,3:500,4:300,5:800}[k]; $('#labIt').value=it; $('#labRuns').value={1:4,2:10,3:10,4:10,5:12}[k]; labBuild(); }
+function labBuild(){ const pr=PRESETS[sel.value]; const p={}; $$('#labParams input').forEach(i=>p[i.dataset.k]=i.value);
+  try{ const m=pr.build(p); const H=m.obj.add(m.pen); LAB={...m,H,N:H.N};
+    $('#labPoly').textContent=H.str(); $('#labN').textContent=LAB.N+' bits · '+(2**LAB.N).toLocaleString('es-ES')+' combinaciones'; $('#labInfo').textContent=m.info||'';
+    labQ(); $('#labSummary').innerHTML='<div class="callout">Pulsa <b>Resolver</b> para lanzar el recocido simulado o <b>Fuerza bruta</b> para ver las mejores combinaciones exactas.</div>'; $('#labRes').innerHTML='';
+  }catch(e){ $('#labPoly').textContent='Error en los datos: '+e.message; } }
+function labQ(){ const N=LAB.N, w=$('#labQwrap'); if(N>16){ w.hidden=true; return; } w.hidden=false; const Q=[...Array(N)].map(()=>Array(N).fill(0)); let off=0;
+  LAB.H.t.forEach((c,k)=>{ if(!k){off+=c;return;} const a=k.split(',').map(Number); if(a.length===1) Q[a[0]][a[0]]+=c; else Q[a[0]][a[1]]+=c; });
+  const mx=Math.max(1,...Q.flat().map(Math.abs)); let h='<tr><th></th>'+Q.map((_,j)=>`<th>${j}</th>`).join('')+'</tr>';
+  Q.forEach((r,i)=>{ h+=`<tr><th>${i}</th>`+r.map((v,j)=>{ if(j<i) return '<td style="opacity:.25">·</td>'; const a=Math.abs(v)/mx; const col=v<0?`rgba(60,79,196,${.15+.75*a})`:v>0?`rgba(204,52,52,${.15+.75*a})`:'transparent'; return `<td style="background:${col};color:${a>.55?'#fff':'inherit'}">${v?fmtN(v):''}</td>`; }).join('')+'</tr>'; });
+  $('#labQ').innerHTML=h+`<caption style="caption-side:bottom;text-align:left;color:var(--muted);font-size:.8rem;padding-top:4px">Constante: ${fmtN(off)}</caption>`; }
+function labSA(runs,its){ const N=LAB.N; const h=Array(N).fill(0), nb=[...Array(N)].map(()=>[]);
+  LAB.H.t.forEach((c,k)=>{ if(!k) return; const a=k.split(',').map(Number); if(a.length===1) h[a[0]]+=c; else { nb[a[0]].push([a[1],c]); nb[a[1]].push([a[0],c]); } });
+  const maxd=Math.max(1,...h.map((v,i)=>Math.abs(v)+nb[i].reduce((s,[,c])=>s+Math.abs(c),0))); const coefs=[...h.filter(Boolean),...[].concat(...nb.map(a=>a.map(([,c])=>c)))].map(Math.abs).filter(Boolean);
+  const T0=maxd/Math.log(2), T1=Math.max((coefs.length?Math.min(...coefs):1)/Math.log(100),1e-6), al=(T1/T0)**(1/Math.max(its-1,1)); const found=new Map();
+  for(let r=0;r<runs;r++){ const x=[...Array(N)].map(()=>Math.random()<.5?1:0); let E=LAB.H.val(x), bx=x.slice(), bE=E, T=T0;
+    for(let k=0;k<its;k++){ const i=Math.floor(Math.random()*N); let f=h[i]; for(const [j,c] of nb[i]) f+=c*x[j]; const dE=(1-2*x[i])*f;
+      if(dE<=0||Math.random()<Math.exp(-dE/T)){ x[i]=1-x[i]; E+=dE; if(E<bE-1e-9){ bE=E; bx=x.slice(); } } T*=al; }
+    const key=bx.join(''); found.set(key,(found.get(key)||0)+1); }
+  return [...found.entries()].map(([b,f])=>({b,f,x:[...b].map(Number)})); }
+function labShow(list,mode){ const sols=list.map(s=>({...s,E:LAB.H.val(s.x),pen:LAB.pen.val(s.x)})).sort((a,b)=>a.E-b.E||b.f-a.f).slice(0,10);
+  const best=sols[0], feas=best.pen===0; const runs=+$('#labRuns').value;
+  $('#labSummary').innerHTML=`<div class="callout ${feas?'ok':'bad'}"><b>${mode==='exact'?'Óptimo exacto':'Mejor solución del annealing'}:</b> <code>${best.b}</code> · energía <b>${fmtN(best.E)}</b> · penalización ${fmtN(best.pen)} ${feas?'<span class="pill ok">factible</span>':'<span class="pill bad">incumple restricciones: sube P o las iteraciones</span>'}<br>${LAB.dec(best.x)}${mode==='sa'?` · encontrada en ${best.f} de ${runs} runs`:''}</div>`;
+  $('#labRes').innerHTML=`<tr><th>bits</th><th>H</th><th>Penaliz.</th><th>Interpretación</th><th>${mode==='sa'?'Frec.':''}</th></tr>`+sols.map((s,i)=>`<tr class="${i===0?'best':''}"><td class="bits">${s.b}</td><td>${fmtN(s.E)}</td><td>${s.pen===0?'<span class="pill ok">0</span>':'<span class="pill bad">'+fmtN(s.pen)+'</span>'}</td><td>${LAB.dec(s.x)}</td><td>${mode==='sa'?s.f:''}</td></tr>`).join(''); }
+$('#labSolve').addEventListener('click',()=>{ if(!LAB) return; const runs=Math.min(200,Math.max(1,+$('#labRuns').value)), its=Math.min(50000,Math.max(10,+$('#labIt').value)); $('#labSummary').innerHTML='<div class="callout">Resolviendo…</div>'; setTimeout(()=>labShow(labSA(runs,its),'sa'),20); });
+$('#labExact').addEventListener('click',()=>{ if(!LAB) return; const N=LAB.N; if(N>20){ $('#labSummary').innerHTML=`<div class="callout warn"><b>${N} bits = ${(2**N).toLocaleString('es-ES')} combinaciones.</b> Demasiadas para la fuerza bruta en el navegador: usa el annealing. Esto es justo lo que hace interesante a un annealer.</div>`; return; }
+  const top=[]; for(let m=0;m<2**N;m++){ const x=[...Array(N)].map((_,i)=>(m>>(N-1-i))&1); const xr=[...Array(N)].map((_,i)=>(m>>i)&1); const E=LAB.H.val(xr); if(top.length<10||E<top[top.length-1].E){ top.push({x:xr,b:xr.join(''),E,f:1}); top.sort((a,b)=>a.E-b.E); if(top.length>10) top.pop(); } }
+  labShow(top,'exact'); });
+sel.addEventListener('change',()=>setPreset(sel.value));
+
+/* ── glosario ── */
+const GL=[
+['Fundamentos','Computación cuántica','Paradigma que usa superposición, entrelazamiento e interferencia para resolver ciertos problemas inabordables para un ordenador clásico.'],
+['Fundamentos','Qubit (cúbit)','Unidad de información cuántica: 0, 1 o una superposición de ambos.'],
+['Fundamentos','Amplitud de probabilidad','Número (α, β) asociado a cada estado; su cuadrado es la probabilidad de obtenerlo al medir.'],
+['Fundamentos','Superposición','Estar en varios estados a la vez. n qubits → 2ⁿ estados.'],
+['Fundamentos','Esfera de Bloch','Representación de un qubit como un punto en una esfera: polo norte |0⟩, polo sur |1⟩.'],
+['Fundamentos','Medición','Colapsa la superposición a 0 o 1 con cierta probabilidad. La destruye.'],
+['Fundamentos','Interferencia','Las amplitudes se suman (constructiva) o se cancelan (destructiva) como ondas.'],
+['Fundamentos','Entrelazamiento','Correlación entre qubits: el estado de uno depende del otro aunque estén lejos.'],
+['Fundamentos','Decoherencia','Pérdida del comportamiento cuántico por medición o ruido del entorno.'],
+['Fundamentos','Túnel cuántico','Atravesar una barrera de energía sin superarla. Ayuda a salir de mínimos locales.'],
+['Fundamentos','Qubit físico / lógico','Físico: el del chip, con errores. Lógico: fiable, hecho con varios físicos y corrección de errores.'],
+['Fundamentos','NISQ','Noisy Intermediate-Scale Quantum: la era actual, con ruido y tamaño medio.'],
+['Fundamentos','Ventaja cuántica','Resolver un problema mejor, más rápido o más barato que cualquier método clásico conocido.'],
+['Fundamentos','QPU','Quantum Processing Unit: procesador cuántico.'],
+['Annealing','Quantum Annealing','Computación cuántica especializada en optimización: busca el mínimo global usando superposición y túnel.'],
+['Annealing','Simulated Annealing','Algoritmo clásico que acepta empeorar con una probabilidad que depende de la temperatura.'],
+['Annealing','Digital Annealer','Hardware CMOS de Fujitsu inspirado en el annealing; temperatura ambiente, hasta 100.000 variables all-to-all.'],
+['Annealing','D-Wave','Empresa pionera en annealing cuántico: Advantage (5.000+ qubits) y Advantage2 (4.400+).'],
+['Annealing','Leap','Servicio en la nube de D-Wave para usar sus QPU y solvers híbridos.'],
+['Annealing','Pegasus / Zephyr','Topologías de conexión de los chips D-Wave (Zephyr: 20 vecinos por qubit).'],
+['Annealing','Embedding','Representar una variable con varios qubits físicos encadenados cuando faltan conexiones.'],
+['Annealing','Paisaje de energía','Todas las soluciones con su energía: valles buenos, picos malos.'],
+['Annealing','Mínimo local / global','Local: valle que no es el más profundo. Global: la mejor solución.'],
+['Annealing','Temperatura','Alta: explora (acepta empeorar). Baja: afina.'],
+['Annealing','Iteraciones','Pasos de búsqueda dentro de una ejecución.'],
+['Annealing','Runs','Ejecuciones independientes del solver sobre el mismo problema.'],
+['Annealing','Frecuencia','Runs que acabaron en la misma solución.'],
+['Annealing','Híbrido','CPU clásica + QPU trabajando juntas en bucle.'],
+['Annealing','QAOA / VQE','Algoritmos híbridos de puertas para optimización (QAOA) y química (VQE).'],
+['QUBO','QUBO','Quadratic Unconstrained Binary Optimization: minimizar una función cuadrática de variables binarias.'],
+['QUBO','Modelo Ising','Equivalente a QUBO con variables {−1, +1}.'],
+['QUBO','Variable binaria','Decisión SÍ/NO (0 o 1). Cumple x² = x.'],
+['QUBO','Función objetivo','Lo que se optimiza: coste, distancia, −beneficio…'],
+['QUBO','Penalización','P·(restricción)²: suma energía a las soluciones que incumplen.'],
+['QUBO','P','Peso de la penalización; mayor que el máximo beneficio obtenible incumpliendo.'],
+['QUBO','Hamiltoniano (H)','Energía total = objetivo + penalizaciones.'],
+['QUBO','Energía','Valor de H en una combinación. Menor = mejor.'],
+['QUBO','Matriz Q','Diagonal: términos lineales; fuera de la diagonal: interacciones xᵢxⱼ.'],
+['QUBO','Offset','Constante sin variables: desplaza energías, no cambia la solución.'],
+['QUBO','Holgura (slack)','Bits extra que convierten una desigualdad en igualdad.'],
+['QUBO','Factible','Solución que cumple todas las restricciones (penalización 0).'],
+['Software','DADK','Digital Annealer Development Kit: librería Python de Fujitsu.'],
+['Software','BinPol / Term','Clases de DADK para polinomios binarios y monomios.'],
+['Software','QUBOSolverCPU','Solver de DADK que emula el Digital Annealer en la CPU.'],
+['Software','Ocean SDK','Librerías Python de D-Wave: dimod, dwave-samplers, dwave-system…'],
+['Software','dimod','Librería de D-Wave para definir modelos BQM, QUBO, Ising y CQM.'],
+['Software','BQM / CQM','Binary Quadratic Model / Constrained Quadratic Model (restricciones explícitas).'],
+['Software','Sampler','Objeto que resuelve un modelo: ExactSolver, SimulatedAnnealingSampler, DWaveSampler…'],
+['Software','SampleSet','Resultado de un sampler: soluciones, energías y apariciones.'],
+['Software','Jupyter Notebook','Cuaderno (.ipynb) que mezcla código, texto, fórmulas y resultados.'],
+['Software','Qiskit / Cirq / Q#','SDK de IBM, Google y Microsoft para ordenadores de puertas.']];
+let glCat='Todos';
+const cats=['Todos',...new Set(GL.map(g=>g[0]))];
+$('#glTabs').innerHTML=cats.map(c=>`<button type="button" role="tab" aria-selected="${c==='Todos'}" data-c="${c}">${c}</button>`).join('');
+$$('#glTabs button').forEach(b=>b.addEventListener('click',()=>{ glCat=b.dataset.c; $$('#glTabs button').forEach(x=>x.setAttribute('aria-selected',x===b)); glDraw(); }));
+function glDraw(){ const q=$('#glQ').value.trim().toLowerCase(); const L=GL.filter(([c,t,d])=>(glCat==='Todos'||c===glCat)&&(!q||(t+' '+d).toLowerCase().includes(q)));
+  $('#glList').innerHTML=L.map(([c,t,d])=>`<div class="card"><small>${c}</small><b>${t}</b><p style="margin:.2em 0 0">${d}</p></div>`).join('')||'<p>No hay términos con esa búsqueda.</p>'; }
+$('#glQ').addEventListener('input',glDraw);
+
+/* ── mini_qubo.py en la página ── */
+
+/* ── arranque ── */
+function redrawAll(){ qDraw(); waveDraw(); anParams(); anDraw(null); if(LAB) labQ(); }
+qDraw(); nDraw(); nTick(); waveDraw(); anParams(); anDraw(null); setPreset(1); glDraw();
+if(location.hash){ const el=document.getElementById(location.hash.slice(1)); if(el) setTimeout(()=>el.scrollIntoView({block:'start'}),50); }
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',redrawAll);
+})();
+</script>
+</body>
+</html>
